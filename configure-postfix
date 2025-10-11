@@ -83,7 +83,8 @@ bash -c "cat > /etc/postfix/main.cf" <<EOF
 # line of that file to be used as the name.  The Debian default
 # is /etc/mailname.
 myorigin = /etc/mailname
-myhostname = \$myorigin
+
+myhostname = ${domain_name}
 
 smtpd_banner = \$myhostname ESMTP \$mail_name (Debian/GNU)
 biff = no
