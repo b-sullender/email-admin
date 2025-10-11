@@ -74,12 +74,14 @@ EOF
 echo "Creating KeyTable..."
 bash -c "cat > /etc/opendkim/KeyTable" <<EOF
 mail._domainkey.${domain_name} ${domain_name}:mail:/etc/opendkim/keys/${domain_name}/mail.private
+
 EOF
 
 # --- SigningTable ---
 echo "Creating SigningTable..."
 bash -c "cat > /etc/opendkim/SigningTable" <<EOF
 *@${domain_name} mail._domainkey.${domain_name}
+
 EOF
 
 # --- Generate DKIM keys ---
