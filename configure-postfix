@@ -58,7 +58,8 @@ echo "Configuring Postfix for domain: ${domain_name}"
 
 # --- Set /etc/mailname based on public IP ---
 echo "Setting /etc/mailname based on public IP..."
-sh -c "dig -x \$(curl -s https://icanhazip.com) +short | cut -d'.' -f5- | sed 's/\.$//' > /etc/mailname"
+mailname=$(dig -x "$(curl -s https://icanhazip.com)" +short | cut -d'.' -f5- | sed 's/\.$//')
+echo "$mailname" > /etc/mailname
 
 echo "Creating virtual domains file..."
 echo -e "${domain_name} OK\n" > /etc/postfix/virtual_mailbox_domains
@@ -82,11 +83,9 @@ bash -c "cat > /etc/postfix/main.cf" <<EOF
 # Debian specific:  Specifying a file name will cause the first
 # line of that file to be used as the name.  The Debian default
 # is /etc/mailname.
-myorigin = /etc/mailname
+#myorigin = /etc/mailname
 
-myhostname = ${domain_name}
-
-smtpd_banner = \$myhostname ESMTP \$mail_name (Debian/GNU)
+smtpd_banner = ${mailname} ESMTP \$mail_name (Debian/GNU)
 biff = no
 
 # appending .domain is the MUA's job.
@@ -125,6 +124,7 @@ mtpd_recipient_restrictions = permit_mynetworks permit_sasl_authenticated permit
 # General settings
 alias_maps = hash:/etc/aliases
 alias_database = hash:/etc/aliases
+myhostname = ${domain_name}
 mydestination = \$myhostname, localhost.localdomain, localhost
 mynetworks = 127.0.0.0/8 [::ffff:127.0.0.0]/104 [::1]/128
 mailbox_size_limit = 0
