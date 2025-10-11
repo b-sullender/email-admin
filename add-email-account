@@ -42,7 +42,8 @@ email_password_hash=$(doveadm pw -s sha512 -p "${email_password}")
 
 # Create user mail directory
 mkdir -p /var/mail/vhosts/${domain_name}/${email_username}
-chown -R postfix:postfix /var/mail/vhosts/${domain_name}/${email_username}
+chown -R postfix:dovecot /var/mail/vhosts/${domain_name}/${email_username}
+chmod 0770 /var/mail/vhosts/${domain_name}/${email_username}
 
 # Add email account entries
 sh -c "echo \"${domain_email} ${domain_name}/${email_username}\" >> /etc/postfix/virtual_mailbox_maps"
