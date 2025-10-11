@@ -75,15 +75,15 @@ if [[ -f /etc/postfix/main.cf ]]; then
     cp /etc/postfix/main.cf /etc/postfix/main.cf.bak
 fi
 
+postfix_uid=$(id -u postfix)
+
 # --- Write Postfix main.cf preserving comments ---
 echo "Writing /etc/postfix/main.cf..."
 bash -c "cat > /etc/postfix/main.cf" <<EOF
 # See /usr/share/postfix/main.cf.dist for a commented, more complete version
 
-# Debian specific:  Specifying a file name will cause the first
-# line of that file to be used as the name.  The Debian default
-# is /etc/mailname.
-#myorigin = /etc/mailname
+myorigin = ${mailname}
+myhostname = ${mailname}
 
 smtpd_banner = ${mailname} ESMTP \$mail_name (Debian/GNU)
 biff = no
@@ -124,7 +124,6 @@ mtpd_recipient_restrictions = permit_mynetworks permit_sasl_authenticated permit
 # General settings
 alias_maps = hash:/etc/aliases
 alias_database = hash:/etc/aliases
-myhostname = ${domain_name}
 mydestination = \$myhostname, localhost.localdomain, localhost
 mynetworks = 127.0.0.0/8 [::ffff:127.0.0.0]/104 [::1]/128
 mailbox_size_limit = 0
@@ -137,6 +136,9 @@ virtual_mailbox_base = /var/mail/vhosts
 virtual_mailbox_domains = hash:/etc/postfix/virtual_mailbox_domains
 virtual_mailbox_maps = hash:/etc/postfix/virtual_mailbox_maps
 virtual_alias_maps = hash:/etc/postfix/virtual_alias_maps
+virtual_minimum_uid = ${postfix_uid}
+virtual_uid_maps = static:${postfix_uid}
+virtual_gid_maps = static:${postfix_uid}
 
 # OpenDKIM configuration
 smtpd_milters = inet:localhost:8891
