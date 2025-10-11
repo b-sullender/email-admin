@@ -47,7 +47,7 @@ chown -R postfix:postfix /var/mail/vhosts/${domain_name}/${email_username}
 # Add email account entries
 sh -c "echo \"${domain_email} ${domain_name}/${email_username}\" >> /etc/postfix/virtual_mailbox_maps"
 sh -c "echo \"${domain_email} ${domain_email}\" >> /etc/postfix/virtual_alias_maps"
-sh -c "echo \"${email_username}:${email_password_hash}::::::\" >> /etc/dovecot/passwd"
+sh -c "echo \"${domain_email}:${email_password_hash}::::::\" >> /etc/dovecot/passwd"
 
 # Update Postfix maps
 postmap /etc/postfix/virtual_alias_maps

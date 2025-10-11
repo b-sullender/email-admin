@@ -65,6 +65,25 @@ fi
 echo "Copying configuration files to /etc/dovecot/conf.d/..."
 cp -r /etc/email-admin/dovecot/conf.d/* /etc/dovecot/conf.d/
 
+dovecot_uid=$(id -u dovecot)
+
+sudo tee -a "/etc/dovecot/conf.d/auth-system.conf.ext" > /dev/null <<EOF
+
+
+# -----------------------------------------------------------------
+# first_valid_uid: The lowest UID value that Dovecot is allowed
+# to use for mail delivery or authentication lookups.
+# Setting this to Dovecot's own UID ensures it won't try to
+# access other system users' mailboxes.
+first_valid_uid = ${dovecot_uid}
+
+# last_valid_uid: The highest UID value Dovecot can use.
+# By setting this equal to dovecot_uid, it restricts Dovecot
+# strictly to its own UID range for additional security.
+last_valid_uid = ${dovecot_uid}
+# -----------------------------------------------------------------
+EOF
+
 # --- Write SSL configuration ---
 echo "Writing /etc/dovecot/conf.d/10-ssl.conf..."
 bash -c "cat > /etc/dovecot/conf.d/10-ssl.conf" <<EOF
