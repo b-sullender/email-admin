@@ -83,7 +83,7 @@ bash -c "cat > /etc/postfix/main.cf" <<EOF
 # See /usr/share/postfix/main.cf.dist for a commented, more complete version
 
 myorigin = ${mailname}
-myhostname = ${mailname}
+myhostname = ${domain_name}
 
 smtpd_banner = ${mailname} ESMTP \$mail_name (Debian/GNU)
 biff = no
@@ -119,7 +119,7 @@ smtpd_sasl_security_options = noanonymous noplaintext
 smtpd_sasl_tls_security_options = noanonymous
 smtpd_relay_restrictions = permit_mynetworks permit_sasl_authenticated defer_unauth_destination
 smtpd_tls_auth_only = yes
-smtpd_recipient_restrictions = permit_mynetworks permit_sasl_authenticated permit_inet_interfaces
+smtpd_recipient_restrictions = permit_mynetworks permit_sasl_authenticated permit_inet_interfaces reject_unauth_destination
 
 # General settings
 alias_maps = hash:/etc/aliases
@@ -139,6 +139,8 @@ virtual_alias_maps = hash:/etc/postfix/virtual_alias_maps
 virtual_minimum_uid = ${postfix_uid}
 virtual_uid_maps = static:${postfix_uid}
 virtual_gid_maps = static:${postfix_uid}
+
+virtual_transport = lmtp:unix:private/dovecot-lmtp
 
 # OpenDKIM configuration
 smtpd_milters = inet:localhost:8891
