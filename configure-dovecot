@@ -98,7 +98,7 @@ ssl = yes
 # dropping root privileges, so keep the key file unreadable by anyone but
 # root. Included doc/mkcert.sh can be used to easily generate self-signed
 # certificate, just make sure to update the domains in dovecot-openssl.cnf
-ssl_cert = </etc/letsencrypt/live/${domain_name}/cert.pem
+ssl_cert = </etc/letsencrypt/live/${domain_name}/fullchain.pem
 ssl_key = </etc/letsencrypt/live/${domain_name}/privkey.pem
 
 # If key file is password protected, give the password here. Alternatively
@@ -148,7 +148,7 @@ ssl_dh = </usr/share/dovecot/dh.pem
 #
 # Dovecot also recognizes values ANY and LATEST. ANY matches with any protocol
 # version, and LATEST matches with the latest version supported by library.
-#ssl_min_protocol = TLSv1.2
+ssl_min_protocol = TLSv1.2
 
 # SSL ciphers to use, the default is:
 #ssl_cipher_list = ALL:!kRSA:!SRP:!kDHd:!DSS:!aNULL:!eNULL:!EXPORT:!DES:!3DES:!MD5:!PSK:!RC4:!ADH:!LOW@STRENGTH
