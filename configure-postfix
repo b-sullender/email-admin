@@ -119,7 +119,7 @@ smtpd_sasl_security_options = noanonymous noplaintext
 smtpd_sasl_tls_security_options = noanonymous
 smtpd_relay_restrictions = permit_mynetworks permit_sasl_authenticated defer_unauth_destination
 smtpd_tls_auth_only = yes
-mtpd_recipient_restrictions = permit_mynetworks permit_sasl_authenticated permit_inet_interfaces
+smtpd_recipient_restrictions = permit_mynetworks permit_sasl_authenticated permit_inet_interfaces
 
 # General settings
 alias_maps = hash:/etc/aliases
