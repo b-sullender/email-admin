@@ -1,0 +1,184 @@
+#!/bin/bash
+
+# --- Configure OpenDKIM Script ---
+# This script installs and configures OpenDKIM for a given domain.
+# It generates a DKIM key and outputs the DNS record for DNS setup.
+
+set -e  # Exit on any error
+
+# Check if we are running as root
+if [ "$(id -u)" -ne 0 ]; then
+    echo "Please run as root 'sudo configure-opendkim'"
+    exit 1
+fi
+
+check_and_install() {
+    local REQUIRED_PKGS=("$@")
+    local MISSING_PKGS=()
+
+    # Check each package
+    for pkg in "${REQUIRED_PKGS[@]}"; do
+        if ! dpkg-query -W --showformat='${Status}\n' "$pkg" 2>/dev/null | grep -q "install ok installed"; then
+            echo "$pkg is not installed."
+            MISSING_PKGS+=("$pkg")
+        else
+            echo "$pkg is already installed."
+        fi
+    done
+
+    # If any are missing, ask once and install all together
+    if [ ${#MISSING_PKGS[@]} -ne 0 ]; then
+        echo
+        echo "The following packages are missing: ${MISSING_PKGS[*]}"
+        read -p "Do you want to install them now? (y/n): " response
+        if [[ "$response" =~ ^[Yy]$ ]]; then
+            apt update
+            apt install -y "${MISSING_PKGS[@]}"
+        else
+            echo "Cannot proceed without required packages. Exiting."
+            exit 1
+        fi
+    else
+        echo "All required packages are already installed."
+    fi
+}
+
+# --- Install OpenDKIM ---
+echo "Checking for OpenDKIM..."
+check_and_install "opendkim" "opendkim-tools" "dnsutils"
+
+# Prompt for domain
+read -p "Enter your domain name (e.g. example.com): " domain_name
+
+if [[ -z "$domain_name" ]]; then
+    echo "Domain name cannot be empty."
+    exit 1
+fi
+
+echo "Configuring OpenDKIM for domain: ${domain_name}"
+sleep 1
+
+# --- Setup directories and permissions ---
+echo "Setting up directories..."
+mkdir -p /etc/opendkim/keys/${domain_name}
+
+# --- Trusted hosts ---
+echo "Creating trusted hosts file..."
+bash -c "cat > /etc/opendkim/TrustedHosts" <<EOF
+127.0.0.1
+localhost
+${domain_name}
+EOF
+
+# --- KeyTable ---
+echo "Creating KeyTable..."
+bash -c "cat > /etc/opendkim/KeyTable" <<EOF
+mail._domainkey.${domain_name} ${domain_name}:mail:/etc/opendkim/keys/${domain_name}/mail.private
+EOF
+
+# --- SigningTable ---
+echo "Creating SigningTable..."
+bash -c "cat > /etc/opendkim/SigningTable" <<EOF
+*@${domain_name} mail._domainkey.${domain_name}
+EOF
+
+# --- Generate DKIM keys ---
+echo "Generating DKIM keys..."
+opendkim-genkey -b 2048 -d ${domain_name} -s mail -D /etc/opendkim/keys/${domain_name}
+chown -R opendkim:opendkim /etc/opendkim/keys/${domain_name}
+chmod go-rw /etc/opendkim/keys/${domain_name}/mail.private
+
+# --- Configure OpenDKIM main config (preserving comments) ---
+echo "Writing /etc/opendkim.conf with comments preserved..."
+bash -c "cat > /etc/opendkim.conf" <<EOF
+# This is a basic configuration for signing and verifying. It can easily be
+# adapted to suit a basic installation. See opendkim.conf(5) and
+# /usr/share/doc/opendkim/examples/opendkim.conf.sample for complete
+# documentation of available configuration parameters.
+
+Syslog			yes
+SyslogSuccess		yes
+LogWhy			yes
+SoftwareHeader          yes
+SendReports             yes
+
+# Common signing and verification parameters. In Debian, the "From" header is
+# oversigned, because it is often the identity key used by reputation systems
+# and thus somewhat security sensitive.
+Canonicalization	relaxed/simple
+Mode			sv
+SignatureAlgorithm      rsa-sha256
+SubDomains		yes
+OversignHeaders		From
+
+# Signing domain, selector, and key (required). For example, perform signing
+# for domain "example.com" with selector "2020" (2020._domainkey.example.com),
+# using the private key stored in /etc/dkimkeys/example.private. More granular
+# setup options can be found in /usr/share/doc/opendkim/README.opendkim.
+#Domain			example.com
+#Selector		2020
+#KeyFile		/etc/dkimkeys/example.private
+
+ExternalIgnoreList refile:/etc/opendkim/TrustedHosts
+InternalHosts refile:/etc/opendkim/TrustedHosts
+KeyTable refile:/etc/opendkim/KeyTable
+SigningTable refile:/etc/opendkim/SigningTable
+
+# In Debian, opendkim runs as user "opendkim". A umask of 007 is required when
+# using a local socket with MTAs that access the socket as a non-privileged
+# user (for example, Postfix). You may need to add user "postfix" to group
+# "opendkim" in that case.
+UserID			opendkim
+UMask			007
+
+# Socket for the MTA connection (required). If the MTA is inside a chroot jail,
+# it must be ensured that the socket is accessible. In Debian, Postfix runs in
+# a chroot in /var/spool/postfix, therefore a Unix socket would have to be
+# configured as shown on the last line below.
+#Socket			local:/run/opendkim/opendkim.sock
+Socket			inet:8891@localhost
+#Socket			inet:8891
+#Socket			local:/var/spool/postfix/opendkim/opendkim.sock
+
+PidFile			/run/opendkim/opendkim.pid
+
+# Hosts for which to sign rather than verify, default is 127.0.0.1. See the
+# OPERATION section of opendkim(8) for more information.
+#InternalHosts		192.168.0.0/16, 10.0.0.0/8, 172.16.0.0/12
+
+# The trust anchor enables DNSSEC. In Debian, the trust anchor file is provided
+# by the package dns-root-data.
+TrustAnchorFile		/usr/share/dns/root.key
+#Nameservers		127.0.0.1
+EOF
+
+# --- Enable and start OpenDKIM ---
+echo "Enabling and starting OpenDKIM..."
+systemctl enable opendkim
+systemctl restart opendkim
+
+# --- Output DKIM DNS Record ---
+echo ""
+echo "OpenDKIM has been configured for: ${domain_name}"
+echo "------------------------------------------------------"
+echo "The DKIM DNS record info is stored in:"
+echo "  /etc/opendkim/keys/${domain_name}/mail.txt"
+echo ""
+echo "Here is the TXT record in a single line:"
+echo ""
+
+dns_content=$(sed -n '/(/,/)/p' "/etc/opendkim/keys/${domain_name}/mail.txt" | sed '
+  1s/^[^(]*(//
+  $s/)[^)]*$//
+')
+dns_content=$(echo "$dns_content" | tr -d '\n' | sed 's/^[ \t]*//;s/[ \t]*$//')
+dns_content=$(echo "$dns_content" | sed -E 's/"[ \t]+"/" "/g')
+
+echo "Host/Name: mail._domainkey.${domain_name}"
+echo "Type: TXT"
+echo "Value: ${dns_content}"
+echo "------------------------------------------------------"
+echo "You can verify the DKIM record with:"
+echo "  dig +short TXT mail._domainkey.${domain_name}"
+echo ""
+echo "Done!"

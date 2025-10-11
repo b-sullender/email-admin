@@ -1,0 +1,157 @@
+#!/bin/bash
+
+# --- Configure Postfix Script ---
+# This script sets up Postfix for a given domain with TLS, SASL, virtual mailboxes, and OpenDKIM.
+
+set -e  # Exit on any error
+
+# Check if we are running as root
+if [ "$(id -u)" -ne 0 ]; then
+    echo "Please run as root 'sudo configure-postfix'"
+    exit 1
+fi
+
+check_and_install() {
+    local REQUIRED_PKGS=("$@")
+    local MISSING_PKGS=()
+
+    # Check each package
+    for pkg in "${REQUIRED_PKGS[@]}"; do
+        if ! dpkg-query -W --showformat='${Status}\n' "$pkg" 2>/dev/null | grep -q "install ok installed"; then
+            echo "$pkg is not installed."
+            MISSING_PKGS+=("$pkg")
+        else
+            echo "$pkg is already installed."
+        fi
+    done
+
+    # If any are missing, ask once and install all together
+    if [ ${#MISSING_PKGS[@]} -ne 0 ]; then
+        echo
+        echo "The following packages are missing: ${MISSING_PKGS[*]}"
+        read -p "Do you want to install them now? (y/n): " response
+        if [[ "$response" =~ ^[Yy]$ ]]; then
+            apt update
+            apt install -y "${MISSING_PKGS[@]}"
+        else
+            echo "Cannot proceed without required packages. Exiting."
+            exit 1
+        fi
+    else
+        echo "All required packages are already installed."
+    fi
+}
+
+# --- Install Postfix ---
+echo "Checking for Postfix..."
+check_and_install "postfix" "postfix-mysql" "dnsutils"
+
+# Prompt for domain
+read -p "Enter your domain name (e.g. example.com): " domain_name
+
+if [[ -z "$domain_name" ]]; then
+    echo "Error: Domain name cannot be empty."
+    exit 1
+fi
+
+echo "Configuring Postfix for domain: ${domain_name}"
+
+# --- Set /etc/mailname based on public IP ---
+echo "Setting /etc/mailname based on public IP..."
+sh -c "dig -x \$(curl -s https://icanhazip.com) +short | cut -d'.' -f5- | sed 's/\.$//' > /etc/mailname"
+
+echo "Creating virtual domains file..."
+echo -e "${domain_name} OK\n" > /etc/postfix/virtual_mailbox_domains
+
+# TLS paths based on domain
+tls_cert="/etc/letsencrypt/live/${domain_name}/cert.pem"
+tls_key="/etc/letsencrypt/live/${domain_name}/privkey.pem"
+tls_chain="/etc/letsencrypt/live/${domain_name}/chain.pem"
+
+# --- Backup existing main.cf ---
+if [[ -f /etc/postfix/main.cf ]]; then
+    echo "Backing up existing main.cf to main.cf.bak"
+    cp /etc/postfix/main.cf /etc/postfix/main.cf.bak
+fi
+
+# --- Write Postfix main.cf preserving comments ---
+echo "Writing /etc/postfix/main.cf..."
+bash -c "cat > /etc/postfix/main.cf" <<EOF
+# See /usr/share/postfix/main.cf.dist for a commented, more complete version
+
+# Debian specific:  Specifying a file name will cause the first
+# line of that file to be used as the name.  The Debian default
+# is /etc/mailname.
+myorigin = /etc/mailname
+myhostname = \$myorigin
+
+smtpd_banner = \$myhostname ESMTP \$mail_name (Debian/GNU)
+biff = no
+
+# appending .domain is the MUA's job.
+append_dot_mydomain = no
+
+# Uncomment the next line to generate "delayed mail" warnings
+#delay_warning_time = 4h
+
+readme_directory = no
+
+# See http://www.postfix.org/COMPATIBILITY_README.html -- default to 3.6 on
+# fresh installs.
+compatibility_level = 3.6
+
+# TLS parameters
+smtpd_tls_cert_file=${tls_cert}
+smtpd_tls_key_file=${tls_key}
+smtpd_tls_CAfile = ${tls_chain}
+smtpd_tls_security_level=may
+
+smtp_tls_CApath=/etc/ssl/certs
+smtp_tls_security_level=may
+smtp_tls_session_cache_database = btree:\${data_directory}/smtp_scache
+
+# SASL & Dovecot configuration
+smtpd_sasl_type = dovecot
+smtpd_sasl_path = private/auth
+smtpd_sasl_auth_enable = yes
+broken_sasl_auth_clients = yes
+smtpd_sasl_security_options = noanonymous noplaintext
+smtpd_sasl_tls_security_options = noanonymous
+smtpd_relay_restrictions = permit_mynetworks permit_sasl_authenticated defer_unauth_destination
+smtpd_tls_auth_only = yes
+mtpd_recipient_restrictions = permit_mynetworks permit_sasl_authenticated permit_inet_interfaces
+
+# General settings
+alias_maps = hash:/etc/aliases
+alias_database = hash:/etc/aliases
+mydestination = \$myhostname, localhost.localdomain, localhost
+mynetworks = 127.0.0.0/8 [::ffff:127.0.0.0]/104 [::1]/128
+mailbox_size_limit = 0
+recipient_delimiter = +
+inet_interfaces = all
+inet_protocols = all
+
+# Virtual mailbox configuration
+virtual_mailbox_base = /var/mail/vhosts
+virtual_mailbox_domains = hash:/etc/postfix/virtual_mailbox_domains
+virtual_mailbox_maps = hash:/etc/postfix/virtual_mailbox_maps
+virtual_alias_maps = hash:/etc/postfix/virtual_alias_maps
+
+# OpenDKIM configuration
+smtpd_milters = inet:localhost:8891
+non_smtpd_milters = \$smtpd_milters
+milter_default_action = accept
+milter_protocol = 6
+EOF
+
+# --- Reload Postfix ---
+echo "Reloading Postfix..."
+postmap /etc/postfix/virtual_mailbox_domains
+systemctl restart postfix
+
+echo "Postfix has been configured for domain: ${domain_name}"
+echo "Virtual mailbox files: /etc/postfix/virtual_mailbox_maps, /etc/postfix/virtual_alias_maps"
+echo "TLS cert: ${tls_cert}"
+echo "TLS key: ${tls_key}"
+echo "OpenDKIM milter: inet:localhost:8891"
+echo "Done."

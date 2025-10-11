@@ -1,0 +1,54 @@
+#!/bin/bash
+
+# --- Email Admin Installer ---
+# Installs admin scripts to /usr/bin and configuration files to /etc/email-admin
+
+set -e  # Exit on any error
+
+# Check if we are running as root
+if [ "$(id -u)" -ne 0 ]; then
+    echo "Please run as root 'sudo bash install'"
+    exit 1
+fi
+
+# Directories
+BIN_DIR="/usr/bin"
+CONF_DIR="/etc/email-admin"
+
+# List of scripts to install
+SCRIPTS=(
+  "configure-opendkim"
+  "configure-postfix"
+  "configure-dovecot"
+  "add-email-account"
+  "delete-email-account"
+)
+
+echo "Installing Email Admin scripts..."
+
+# --- Install scripts to /usr/bin ---
+for script in "${SCRIPTS[@]}"; do
+    if [[ -f "$script" ]]; then
+        echo "Installing $script -> $BIN_DIR/$script"
+        cp "$script" "$BIN_DIR/$script"
+        chmod +x "$BIN_DIR/$script"
+    else
+        echo "Warning: Script '$script' not found in current directory, skipping."
+    fi
+done
+
+# --- Copy dovecot configuration directory ---
+if [[ -d "dovecot" ]]; then
+    echo "Copying dovecot/ -> $CONF_DIR"
+    mkdir -p "$CONF_DIR"
+    cp -R dovecot "$CONF_DIR/"
+else
+    echo "Warning: Directory 'dovecot/' not found, skipping copy to $CONF_DIR."
+fi
+
+echo "Installation complete."
+echo "Installed scripts:"
+for script in "${SCRIPTS[@]}"; do
+    echo "  - $BIN_DIR/$script"
+done
+echo "Configuration directory: $CONF_DIR"

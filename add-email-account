@@ -1,0 +1,60 @@
+#!/bin/bash
+
+set -e  # Exit on any error
+
+# Check if we are running as root
+if [ "$(id -u)" -ne 0 ]; then
+    echo "Please run as root 'sudo new-email'"
+    exit 1
+fi
+
+# Prompt user for input
+read -p "Enter domain name (e.g. example.com): " domain_name
+
+if [[ -z "$domain_name" ]]; then
+    echo "Error: Domain name cannot be empty."
+    exit 1
+fi
+
+read -p "Enter email username (e.g. support): " email_username
+
+if [[ -z "$email_username" ]]; then
+    echo "Error: Username cannot be empty."
+    exit 1
+fi
+
+read -s -p "Enter email password: " email_password
+
+if [[ -z "$email_password" ]]; then
+    echo "Error: Password cannot be empty."
+    exit 1
+fi
+
+echo ""  # newline after password input
+
+# Build email address
+domain_email="${email_username}@${domain_name}"
+
+echo "Creating mail account for: ${domain_email}"
+
+# Create password hash using Dovecot
+email_password_hash=$(doveadm pw -s sha512 -p "${email_password}")
+
+# Create user mail directory
+mkdir -p /var/mail/vhosts/${domain_name}/${email_username}
+chown -R postfix:postfix /var/mail/vhosts/${domain_name}/${email_username}
+
+# Add email account entries
+sh -c "echo \"${domain_email} ${domain_name}/${email_username}\" >> /etc/postfix/virtual_mailbox_maps"
+sh -c "echo \"${domain_email} ${domain_email}\" >> /etc/postfix/virtual_alias_maps"
+sh -c "echo \"${email_username}:${email_password_hash}::::::\" >> /etc/dovecot/passwd"
+
+# Update Postfix maps
+postmap /etc/postfix/virtual_alias_maps
+postmap /etc/postfix/virtual_mailbox_maps
+
+# Reload services
+systemctl reload postfix
+systemctl reload dovecot
+
+echo "Email account ${domain_email} has been successfully created."
