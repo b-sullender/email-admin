@@ -47,48 +47,20 @@ check_and_install() {
 echo "Checking for OpenDKIM..."
 check_and_install "opendkim" "opendkim-tools" "dnsutils"
 
-# Prompt for domain
-read -p "Enter your domain name (e.g. example.com): " domain_name
-
-if [[ -z "$domain_name" ]]; then
-    echo "Domain name cannot be empty."
-    exit 1
-fi
-
-echo "Configuring OpenDKIM for domain: ${domain_name}"
-sleep 1
+echo "Configuring OpenDKIM..."
 
 # --- Setup directories and permissions ---
-echo "Setting up directories..."
-mkdir -p /etc/opendkim/keys/${domain_name}
+echo "Setting up directories and files..."
+mkdir -p /etc/opendkim/keys/
+touch /etc/opendkim/KeyTable
+touch /etc/opendkim/SigningTable
 
 # --- Trusted hosts ---
 echo "Creating trusted hosts file..."
 bash -c "cat > /etc/opendkim/TrustedHosts" <<EOF
 127.0.0.1
 localhost
-${domain_name}
 EOF
-
-# --- KeyTable ---
-echo "Creating KeyTable..."
-bash -c "cat > /etc/opendkim/KeyTable" <<EOF
-mail._domainkey.${domain_name} ${domain_name}:mail:/etc/opendkim/keys/${domain_name}/mail.private
-
-EOF
-
-# --- SigningTable ---
-echo "Creating SigningTable..."
-bash -c "cat > /etc/opendkim/SigningTable" <<EOF
-*@${domain_name} mail._domainkey.${domain_name}
-
-EOF
-
-# --- Generate DKIM keys ---
-echo "Generating DKIM keys..."
-opendkim-genkey -b 2048 -d ${domain_name} -s mail -D /etc/opendkim/keys/${domain_name}
-chown -R opendkim:opendkim /etc/opendkim/keys/${domain_name}
-chmod go-rw /etc/opendkim/keys/${domain_name}/mail.private
 
 # --- Configure OpenDKIM main config (preserving comments) ---
 echo "Writing /etc/opendkim.conf with comments preserved..."
@@ -159,28 +131,4 @@ echo "Enabling and starting OpenDKIM..."
 systemctl enable opendkim
 systemctl restart opendkim
 
-# --- Output DKIM DNS Record ---
-echo ""
-echo "OpenDKIM has been configured for: ${domain_name}"
-echo "------------------------------------------------------"
-echo "The DKIM DNS record info is stored in:"
-echo "  /etc/opendkim/keys/${domain_name}/mail.txt"
-echo ""
-echo "Here is the TXT record in a single line:"
-echo ""
-
-dns_content=$(sed -n '/(/,/)/p' "/etc/opendkim/keys/${domain_name}/mail.txt" | sed '
-  1s/^[^(]*(//
-  $s/)[^)]*$//
-')
-dns_content=$(echo "$dns_content" | tr -d '\n' | sed 's/^[ \t]*//;s/[ \t]*$//')
-dns_content=$(echo "$dns_content" | sed -E 's/"[ \t]+"/" "/g')
-
-echo "Host/Name: mail._domainkey.${domain_name}"
-echo "Type: TXT"
-echo "Value: ${dns_content}"
-echo "------------------------------------------------------"
-echo "You can verify the DKIM record with:"
-echo "  dig +short TXT mail._domainkey.${domain_name}"
-echo ""
-echo "Done!"
+echo "OpenDKIM setup complete!"

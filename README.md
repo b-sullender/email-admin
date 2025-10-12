@@ -5,7 +5,7 @@
 ## Features
 - Install and set up a complete email server
 - Configure **Postfix**, **Dovecot**, and **OpenDKIM**
-- Easily add or delete email accounts
+- Easily add or delete domains & email accounts
 
 ## Installation
 
@@ -15,7 +15,7 @@ Clone the repository and run the installer:
 git clone https://github.com/b-sullender/email-admin.git && cd email-admin
 sudo bash install
 cd ../ && rm -rf email-admin
-````
+```
 
 ## Usage
 
@@ -25,6 +25,12 @@ After installation, configure the services:
 sudo configure-opendkim
 sudo configure-postfix
 sudo configure-dovecot
+```
+
+Then add your domains:
+
+```bash
+sudo add-email-domain
 ```
 
 ### Managing Email Accounts

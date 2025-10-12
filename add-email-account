@@ -144,4 +144,4 @@ postmap /etc/postfix/virtual_mailbox_maps
 systemctl reload postfix
 systemctl reload dovecot
 
-echo "Email account ${domain_email} and aliases have been successfully created."
+echo "Email account ${domain_email} created!"

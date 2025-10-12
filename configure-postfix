@@ -47,11 +47,34 @@ echo "Checking for Postfix..."
 check_and_install "postfix" "postfix-mysql" "dnsutils"
 
 # Prompt for domain
-read -p "Enter your domain name (e.g. example.com): " domain_name
+echo ""
+echo "Enter the domain name for the receiving mail server"
+echo ""
+read -p "(e.g. example.com): " domain_name
 
 if [[ -z "$domain_name" ]]; then
     echo "Error: Domain name cannot be empty."
     exit 1
+fi
+
+# Prompt for hostname
+cat <<EOF
+Enter the hostname for this mail server (optional)
+This is useful if your domain uses multiple mail servers.
+For example, you might have:
+  - 'mail' for mail.example.com
+  - 'mx1' for mx1.example.com
+  - 'mx2' for mx2.example.com
+If left empty, the domain will be used without a hostname.
+
+EOF
+read -p "Hostname (e.g. mail): " hostname
+
+# If hostname is not empty, prepend it to the domain_name
+if [[ -n "$hostname" ]]; then
+    full_domain_name="${hostname}.${domain_name}"
+else
+    full_domain_name=${domain_name}
 fi
 
 echo "Configuring Postfix for domain: ${domain_name}"
@@ -59,9 +82,9 @@ echo "Configuring Postfix for domain: ${domain_name}"
 # --- Set /etc/mailname based on public IP and reverse DNS ptr ---
 echo "Setting /etc/mailname based on public IP and reverse DNS ptr"
 public_ip=$(curl -s https://icanhazip.com)
-echo "Public IP Address: $public_ip"
+echo "Public IP address: $public_ip"
 reverse_dns_ptr=$(dig -x $public_ip +short)
-echo "Reverse DNS Ptr: $reverse_dns_ptr"
+echo "Reverse DNS ptr: $reverse_dns_ptr"
 echo "$reverse_dns_ptr" > /etc/mailname
 
 # --- Copy configuration files ---
@@ -72,9 +95,6 @@ fi
 
 echo "Copying configuration files to /etc/postfix/..."
 cp -r /etc/email-admin/postfix/* /etc/postfix/
-
-echo "Creating virtual domains file..."
-echo -e "${domain_name} OK" > /etc/postfix/virtual_mailbox_domains
 
 # TLS paths based on domain
 tls_cert="/etc/letsencrypt/live/${domain_name}/cert.pem"
@@ -95,7 +115,7 @@ bash -c "cat > /etc/postfix/main.cf" <<EOF
 # See /usr/share/postfix/main.cf.dist for a commented, more complete version
 
 myorigin = ${reverse_dns_ptr}
-myhostname = ${domain_name}
+myhostname = ${full_domain_name}
 
 smtpd_banner = ${reverse_dns_ptr} ESMTP \$mail_name (Debian/GNU)
 biff = no
@@ -166,9 +186,15 @@ echo "Reloading Postfix..."
 postmap /etc/postfix/virtual_mailbox_domains
 systemctl restart postfix
 
-echo "Postfix has been configured for domain: ${domain_name}"
-echo "Virtual mailbox files: /etc/postfix/virtual_mailbox_maps, /etc/postfix/virtual_alias_maps"
+echo "Postfix has been configured for domain: ${full_domain_name}"
+echo "virtual_mailbox_domains: /etc/postfix/virtual_mailbox_domains"
+echo "virtual_mailbox_maps: /etc/postfix/virtual_mailbox_maps"
+echo "virtual_alias_maps: /etc/postfix/virtual_alias_maps"
 echo "TLS cert: ${tls_cert}"
 echo "TLS key: ${tls_key}"
 echo "OpenDKIM milter: inet:localhost:8891"
-echo "Done."
+echo "Create the following DNS A record for ${domain_name}"
+echo ""
+echo "A  ${full_domain_name}  ${public_ip}"
+echo ""
+echo "Postfix setup complete!"

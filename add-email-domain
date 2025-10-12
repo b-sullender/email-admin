@@ -1,0 +1,68 @@
+#!/bin/bash
+
+set -e  # Exit on any error
+
+# Check if we are running as root
+if [ "$(id -u)" -ne 0 ]; then
+    echo "Please run as root 'sudo add-email-domain'"
+    exit 1
+fi
+
+# Prompt for domain
+read -p "Enter your domain name (e.g. example.com): " domain_name
+
+if [[ -z "$domain_name" ]]; then
+    echo "Error: Domain name cannot be empty."
+    exit 1
+fi
+
+echo "Creating directories..."
+mkdir -p /etc/opendkim/keys/${domain_name}
+
+# --- Generate DKIM keys ---
+echo "Generating DKIM keys..."
+opendkim-genkey -b 2048 -d ${domain_name} -s mail -D /etc/opendkim/keys/${domain_name}
+chown -R opendkim:opendkim /etc/opendkim/keys/${domain_name}
+chmod go-rw /etc/opendkim/keys/${domain_name}/mail.private
+
+echo "Updating DKIM tables..."
+echo -e "mail._domainkey.${domain_name} ${domain_name}:mail:/etc/opendkim/keys/${domain_name}/mail.private" >> /etc/opendkim/KeyTable
+echo -e "*@${domain_name} mail._domainkey.${domain_name}" >> /etc/opendkim/SigningTable
+
+echo "Adding domain to OpenDKIM and Postfix"
+echo -e "${domain_name}" >> /etc/opendkim/TrustedHosts
+echo -e "${domain_name} OK" >> /etc/postfix/virtual_mailbox_domains
+
+# --- Reload OpenDKIM ---
+echo "Reloading OpenDKIM..."
+systemctl reload opendkim
+
+# --- Reload Postfix ---
+echo "Reloading Postfix..."
+postmap /etc/postfix/virtual_mailbox_domains
+systemctl reload postfix
+
+# TODO: Show MX records "MX  hostname.domain_name  ${domain_name}
+
+echo "------------------------------------------------------"
+echo "The DKIM DNS record info is stored in:"
+echo "  /etc/opendkim/keys/${domain_name}/mail.txt"
+echo ""
+echo "Here is the TXT record in a single line:"
+echo ""
+
+dns_content=$(sed -n '/(/,/)/p' "/etc/opendkim/keys/${domain_name}/mail.txt" | sed '
+  1s/^[^(]*(//
+  $s/)[^)]*$//
+')
+dns_content=$(echo "$dns_content" | tr -d '\n' | sed 's/^[ \t]*//;s/[ \t]*$//')
+dns_content=$(echo "$dns_content" | sed -E 's/"[ \t]+"/" "/g')
+
+echo "Host/Name: mail._domainkey.${domain_name}"
+echo "Type: TXT"
+echo "Value: ${dns_content}"
+echo "------------------------------------------------------"
+echo "You can verify the DKIM record with:"
+echo "  dig +short TXT mail._domainkey.${domain_name}"
+echo ""
+echo "Finished adding domain!"
