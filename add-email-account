@@ -4,38 +4,118 @@ set -e  # Exit on any error
 
 # Check if we are running as root
 if [ "$(id -u)" -ne 0 ]; then
-    echo "Please run as root 'sudo new-email'"
+    echo "Please run as root 'sudo add-email-account'"
     exit 1
+fi
+
+# Check if /etc/postfix/virtual_mailbox_maps exists and is not empty
+if [ ! -s /etc/postfix/virtual_mailbox_maps ]; then
+    cat <<EOF
+It looks like no email accounts exist yet.
+For a properly configured mail server, it is recommended to have at least:
+  - 'postmaster'
+  - 'abuse'
+  - 'webmaster'
+
+The best practice is to create an admin account and set these as aliases.
+
+Press Enter to continue...
+EOF
+    read  # Wait for the user to press Enter
 fi
 
 # Prompt user for input
 read -p "Enter domain name (e.g. example.com): " domain_name
-
 if [[ -z "$domain_name" ]]; then
     echo "Error: Domain name cannot be empty."
     exit 1
 fi
 
-read -p "Enter email username (e.g. support): " email_username
-
+read -p "Enter email username (e.g. admin): " email_username
 if [[ -z "$email_username" ]]; then
     echo "Error: Username cannot be empty."
     exit 1
 fi
 
 read -s -p "Enter email password: " email_password
-
 if [[ -z "$email_password" ]]; then
     echo "Error: Password cannot be empty."
     exit 1
 fi
-
 echo ""  # newline after password input
 
 # Build email address
 domain_email="${email_username}@${domain_name}"
+echo "Preparing mail account for: ${domain_email}"
 
-echo "Creating mail account for: ${domain_email}"
+# -------------------------------
+# Interactive alias management
+# -------------------------------
+declare -a aliases  # Start empty
+
+while true; do
+    echo ""
+    echo "Current aliases:"
+    if [ ${#aliases[@]} -eq 0 ]; then
+        echo "  (none)"
+    else
+        for a in "${aliases[@]}"; do
+            echo "  $a"
+        done
+    fi
+
+    echo ""
+    echo "Options:"
+    echo "  1) Add an alias"
+    echo "  2) Remove an alias"
+    echo "  3) Finish"
+    read -p "Choose an option [1-3]: " option
+
+    case $option in
+        1)
+            read -p "Enter alias to add (e.g. postmaster): " alias_name
+            if [[ -z "$alias_name" ]]; then
+                echo "Alias cannot be empty."
+                continue
+            fi
+            full_alias="${alias_name}@${domain_name}"
+            # Check for duplicates
+            if [[ " ${aliases[*]} " == *" $full_alias "* ]]; then
+                echo "Alias $full_alias already exists."
+            else
+                aliases+=("$full_alias")
+                echo "Added alias: $full_alias"
+            fi
+            ;;
+        2)
+            read -p "Enter alias to remove (e.g. support): " alias_name
+            full_alias="${alias_name}@${domain_name}"
+            found=false
+            for i in "${!aliases[@]}"; do
+                if [[ "${aliases[i]}" == "$full_alias" ]]; then
+                    unset 'aliases[i]'
+                    found=true
+                    echo "Removed alias: $full_alias"
+                    break
+                fi
+            done
+            if ! $found; then
+                echo "Alias $full_alias not found."
+            fi
+            ;;
+        3)
+            echo "Finished managing aliases."
+            break
+            ;;
+        *)
+            echo "Invalid option, please enter 1, 2, or 3."
+            ;;
+    esac
+done
+
+# -------------------------------
+# Apply all changes
+# -------------------------------
 
 # Create password hash using Dovecot
 email_password_hash=$(doveadm pw -s sha512 -p "${email_password}")
@@ -45,9 +125,15 @@ mkdir -p /var/mail/vhosts/${domain_name}/${email_username}
 chown -R postfix:dovecot /var/mail/vhosts/${domain_name}/${email_username}
 chmod 0770 /var/mail/vhosts/${domain_name}/${email_username}
 
-# Add email account entries
+# Add email account entry
 sh -c "echo \"${domain_email} ${domain_name}/${email_username}\" >> /etc/postfix/virtual_mailbox_maps"
-sh -c "echo \"${domain_email} ${domain_email}\" >> /etc/postfix/virtual_alias_maps"
+
+# Add aliases
+for a in "${aliases[@]}"; do
+    sh -c "echo \"${a} ${domain_email}\" >> /etc/postfix/virtual_alias_maps"
+done
+
+# Add password entry
 sh -c "echo \"${domain_email}:${email_password_hash}::::::\" >> /etc/dovecot/passwd"
 
 # Update Postfix maps
@@ -58,4 +144,4 @@ postmap /etc/postfix/virtual_mailbox_maps
 systemctl reload postfix
 systemctl reload dovecot
 
-echo "Email account ${domain_email} has been successfully created."
+echo "Email account ${domain_email} and aliases have been successfully created."
