@@ -56,13 +56,16 @@ fi
 
 echo "Configuring Postfix for domain: ${domain_name}"
 
-# --- Set /etc/mailname based on public IP ---
-echo "Setting /etc/mailname based on public IP..."
-mailname=$(dig -x "$(curl -s https://icanhazip.com)" +short | cut -d'.' -f5- | sed 's/\.$//')
-echo "$mailname" > /etc/mailname
+# --- Set /etc/mailname based on public IP and reverse DNS ptr ---
+echo "Setting /etc/mailname based on public IP and reverse DNS ptr"
+public_ip=$(curl -s https://icanhazip.com)
+echo "Public IP Address: $public_ip"
+reverse_dns_ptr=$(dig -x $public_ip +short)
+echo "Reverse DNS Ptr: $reverse_dns_ptr"
+echo "$reverse_dns_ptr" > /etc/mailname
 
 echo "Creating virtual domains file..."
-echo -e "${domain_name} OK\n" > /etc/postfix/virtual_mailbox_domains
+echo -e "${domain_name} OK" > /etc/postfix/virtual_mailbox_domains
 
 # TLS paths based on domain
 tls_cert="/etc/letsencrypt/live/${domain_name}/cert.pem"
@@ -82,10 +85,10 @@ echo "Writing /etc/postfix/main.cf..."
 bash -c "cat > /etc/postfix/main.cf" <<EOF
 # See /usr/share/postfix/main.cf.dist for a commented, more complete version
 
-myorigin = ${mailname}
+myorigin = ${reverse_dns_ptr}
 myhostname = ${domain_name}
 
-smtpd_banner = ${mailname} ESMTP \$mail_name (Debian/GNU)
+smtpd_banner = ${reverse_dns_ptr} ESMTP \$mail_name (Debian/GNU)
 biff = no
 
 # appending .domain is the MUA's job.
