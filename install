@@ -37,6 +37,15 @@ for script in "${SCRIPTS[@]}"; do
     fi
 done
 
+# --- Copy postfix configuration directory ---
+if [[ -d "postfix" ]]; then
+    echo "Copying postfix/ -> $CONF_DIR"
+    mkdir -p "$CONF_DIR"
+    cp -R postfix "$CONF_DIR/"
+else
+    echo "Warning: Directory 'postfix/' not found, skipping copy to $CONF_DIR."
+fi
+
 # --- Copy dovecot configuration directory ---
 if [[ -d "dovecot" ]]; then
     echo "Copying dovecot/ -> $CONF_DIR"

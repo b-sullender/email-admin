@@ -64,6 +64,15 @@ reverse_dns_ptr=$(dig -x $public_ip +short)
 echo "Reverse DNS Ptr: $reverse_dns_ptr"
 echo "$reverse_dns_ptr" > /etc/mailname
 
+# --- Copy configuration files ---
+if [[ ! -d /etc/email-admin/postfix ]]; then
+    echo "Error: Local directory '/etc/email-admin/postfix/' not found."
+    exit 1
+fi
+
+echo "Copying configuration files to /etc/postfix/..."
+cp -r /etc/email-admin/postfix/* /etc/postfix/
+
 echo "Creating virtual domains file..."
 echo -e "${domain_name} OK" > /etc/postfix/virtual_mailbox_domains
 
