@@ -77,7 +77,8 @@ else
     full_domain_name=${domain_name}
 fi
 
-echo "Configuring Postfix for domain: ${domain_name}"
+echo "Saving MX name to /etc/email-admin/mx_name"
+echo "$full_domain_name" > /etc/email-admin/mx_name
 
 # --- Set /etc/mailname based on public IP and reverse DNS ptr ---
 echo "Setting /etc/mailname based on public IP and reverse DNS ptr"
@@ -86,6 +87,8 @@ echo "Public IP address: $public_ip"
 reverse_dns_ptr=$(dig -x $public_ip +short)
 echo "Reverse DNS ptr: $reverse_dns_ptr"
 echo "$reverse_dns_ptr" > /etc/mailname
+
+echo "Configuring Postfix for domain: ${full_domain_name}"
 
 # --- Copy configuration files ---
 if [[ ! -d /etc/email-admin/postfix ]]; then
@@ -193,8 +196,12 @@ echo "virtual_alias_maps: /etc/postfix/virtual_alias_maps"
 echo "TLS cert: ${tls_cert}"
 echo "TLS key: ${tls_key}"
 echo "OpenDKIM milter: inet:localhost:8891"
-echo "Create the following DNS A record for ${domain_name}"
 echo ""
-echo "A  ${full_domain_name}  ${public_ip}"
+echo "DNS Records"
+echo "------------------------------------------------------"
+echo "Host/Name: ${full_domain_name}"
+echo "Type: A"
+echo "Value: ${public_ip}"
+echo "------------------------------------------------------"
 echo ""
 echo "Postfix setup complete!"

@@ -42,7 +42,31 @@ echo "Reloading Postfix..."
 postmap /etc/postfix/virtual_mailbox_domains
 systemctl reload postfix
 
-# TODO: Show MX records "MX  hostname.domain_name  ${domain_name}
+echo ""
+echo "DNS Records"
+echo "------------------------------------------------------"
+
+# Function to print MX block
+print_mx_block() {
+    local mx="$1"
+    echo "------------------------------------------------------"
+    echo "Host/Name: ${domain_name}"
+    echo "Type: MX"
+    echo "Value: $mx"
+    echo "------------------------------------------------------"
+    echo ""
+}
+# Check if main MX file exists
+if [ -f /etc/email-admin/mx_name ]; then
+    while IFS= read -r mx; do
+        print_mx_block "$mx"
+    done < /etc/email-admin/mx_name
+else
+    echo "MX record file not found: /etc/email-admin/mx_name"
+fi
+echo "If the mail domain has additional servers, add them manually (e.g., mx1, mx2)."
+echo "Optional: You can list extra MX servers in /etc/email-admin/mx_name (one per line) for future automation."
+echo ""
 
 echo "------------------------------------------------------"
 echo "The DKIM DNS record info is stored in:"
@@ -64,5 +88,6 @@ echo "Value: ${dns_content}"
 echo "------------------------------------------------------"
 echo "You can verify the DKIM record with:"
 echo "  dig +short TXT mail._domainkey.${domain_name}"
+echo "------------------------------------------------------"
 echo ""
 echo "Finished adding domain!"
