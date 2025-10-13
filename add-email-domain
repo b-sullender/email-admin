@@ -43,8 +43,30 @@ postmap /etc/postfix/virtual_mailbox_domains
 systemctl reload postfix
 
 echo ""
+echo ""
+echo "DMARC setup"
+echo ""
+echo "Enter the email for DKIM/SPF failure reports."
+echo ""
+
+read -p "Enter email (e.g., postmaster@example.com): " dmarc_ruf
+
+if [[ -z "$dmarc_ruf" ]]; then
+    echo "Error: Email cannot be empty."
+    exit 1
+fi
+
+read -p "Also get daily summary (rua) reports at the same address? (y/n): " rua_choice
+
+if [[ "$rua_choice" =~ ^[Yy]$ ]]; then
+    dmarc_record="v=DMARC1; p=reject; sp=reject; adkim=r; aspf=r; rua=mailto:${dmarc_ruf}; ruf=mailto:${dmarc_ruf}; fo=1"
+else
+    dmarc_record="v=DMARC1; p=reject; sp=reject; adkim=r; aspf=r; ruf=mailto:${dmarc_ruf}; fo=1"
+fi
+
+echo ""
+echo ""
 echo "DNS Records"
-echo "------------------------------------------------------"
 
 # Function to print MX block
 print_mx_block() {
@@ -68,6 +90,14 @@ echo "If the mail domain has additional servers, add them manually (e.g., mx1, m
 echo "Optional: You can list extra MX servers in /etc/email-admin/mx_name (one per line) for future automation."
 echo ""
 
+echo "------------------------------------------------------"
+echo "Host/Name: ${domain_name}"
+echo "Type: TXT"
+echo -e "Value: \"v=spf1 a mx -all\""
+echo "------------------------------------------------------"
+echo "Host/Name: _dmarc.${domain_name}"
+echo "Type: TXT"
+echo "Value: \"${dmarc_record}\""
 echo "------------------------------------------------------"
 echo "The DKIM DNS record info is stored in:"
 echo "  /etc/opendkim/keys/${domain_name}/mail.txt"

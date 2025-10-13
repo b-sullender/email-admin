@@ -50,7 +50,7 @@ check_and_install "postfix" "postfix-mysql" "dnsutils"
 echo ""
 echo "Enter the domain name for the receiving mail server"
 echo ""
-read -p "(e.g. example.com): " domain_name
+read -p "Enter domain (e.g. example.com): " domain_name
 
 if [[ -z "$domain_name" ]]; then
     echo "Error: Domain name cannot be empty."
