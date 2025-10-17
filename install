@@ -15,19 +15,24 @@ fi
 BIN_DIR="/usr/bin"
 CONF_DIR="/etc/email-admin"
 
+if [[ -d "$CONF_DIR" ]]; then
+    echo "Deleting $CONF_DIR ..."
+    rm -R $CONF_DIR
+fi
+
 # List of scripts to install
 SCRIPTS=(
-  "configure-opendkim"
-  "configure-postfix"
-  "configure-dovecot"
-  "add-email-domain"
-  "add-email-account"
-  "delete-email-domain"
-  "delete-email-account"
-  "purge-email-server"
+    "configure-opendkim"
+    "configure-postfix"
+    "configure-dovecot"
+    "add-email-domain"
+    "add-email-account"
+    "delete-email-domain"
+    "delete-email-account"
+    "purge-email-server"
 )
 
-echo "Installing Email Admin scripts..."
+echo "Installing Email Admin scripts ..."
 
 # --- Install scripts to /usr/bin ---
 for script in "${SCRIPTS[@]}"; do
@@ -57,6 +62,10 @@ if [[ -d "dovecot" ]]; then
 else
     echo "Warning: Directory 'dovecot/' not found, skipping copy to $CONF_DIR."
 fi
+
+# --- Copy common.sh ---
+echo "Copying common.sh ..."
+cp common.sh $CONF_DIR/common.sh
 
 echo "Installation complete."
 echo "Installed scripts:"
