@@ -1,0 +1,49 @@
+#!/bin/bash
+
+# --- Purge Email Server Script ---
+# This script removes all common email services and their configuration files.
+
+set -e  # Exit on any error
+
+# Check if we are running as root
+if [ "$(id -u)" -ne 0 ]; then
+    echo "Please run as root: sudo $0"
+    exit 1
+fi
+
+# Warning message
+echo "WARNING: This will completely remove the following:"
+echo " - Postfix"
+echo " - Dovecot"
+echo " - OpenDKIM"
+echo " - Related configuration files"
+echo ""
+
+# Confirmation prompt
+read -p "Are you sure you want to continue? [y/N] " confirm
+confirm=${confirm,,}  # lowercase
+if [[ "$confirm" != "y" && "$confirm" != "yes" ]]; then
+    echo "Aborted."
+    exit 0
+fi
+
+echo "Removing email packages..."
+apt purge -y postfix postfix-mysql opendkim opendkim-tools dovecot-core dovecot-imapd dovecot-pop3d dovecot-lmtpd dovecot-mysql
+
+echo "Removing configuration directories..."
+for dir in /etc/postfix /etc/opendkim /etc/dovecot /var/mail/vhosts; do
+    if [ -d "$dir" ]; then
+        echo "Deleting $dir"
+        rm -rf "$dir"
+    else
+        echo "Skipping $dir (not found)"
+    fi
+done
+
+if [ -f /etc/opendkim.conf ]; then
+    echo "Deleting /etc/opendkim.conf"
+    rm -f /etc/opendkim.conf
+fi
+
+echo ""
+echo "Email services and configurations have been removed!"

@@ -1,72 +1,220 @@
+# ====================================================================
+# Postfix master.cf - Configuration for Local + Virtual Mail
+# ====================================================================
 #
-# Postfix master process configuration file. For details on the format
-# of the file, see the master(5) manual page (command: "man 5 master" or
-# on-line: http://www.postfix.org/master.5.html).
+# Columns:
+#   service   type  private unpriv  chroot  wakeup  maxproc command + args
 #
-# Do not forget to execute "postfix reload" after editing this file.
-# ==========================================================================
-# service type  private unpriv  chroot  wakeup  maxproc command + args
-#               (yes)   (yes)   (no)    (never) (100)
-# ==========================================================================
+#   service  - name of the service or socket
+#   type     - inet (TCP/IP) or unix (local IPC)
+#   private  - y: private to Postfix, n: public
+#   unpriv   - n: run unprivileged (non-root)
+#   chroot   - y: run in Postfix chroot (/var/spool/postfix)
+#   wakeup   - wakeup interval or "-" (none)
+#   maxproc  - max processes (or "-" for default)
+#   command  - the program executed, with args
+#
+# ====================================================================
+
+# --------------------------------------------------------------------
+# Inbound & Outbound SMTP for external MTAs (port 25)
+# --------------------------------------------------------------------
+
+# Handles all inbound & outbound mail from the Internet.
+# service type  private unpriv  chroot  wakeup  maxproc command
 smtp      inet  n       -       y       -       -       smtpd
+
+  -o syslog_name=postfix/smtp
+    # SMTP logs
+
+# --------------------------------------------------------------------
+# Mail Submission (port 587) - for MUAs (Mail User Agents)
+# --------------------------------------------------------------------
+
+# service  type private unpriv  chroot  wakeup  maxproc command
 submission inet n       -       y       -       -       smtpd
+
   -o syslog_name=postfix/submission
-  -o smtpd_tls_security_level=encrypt
-  -o smtpd_sasl_auth_enable=yes
-  -o smtpd_tls_auth_only=yes
-  -o smtpd_reject_unlisted_recipient=no
-  -o smtpd_client_restrictions=$mua_client_restrictions
-  -o smtpd_helo_restrictions=$mua_helo_restrictions
-  -o smtpd_sender_restrictions=$mua_sender_restrictions
+    # Submission logs
+
+  -o smtpd_tls_wrappermode=no
+    # Use STARTTLS (explicit TLS upgrade)
+
+  -o smtpd_reject_unlisted_sender=yes
+    # Prevent sending mail from nonexistent local addresses (only for submission ports)
+
+  -o smtpd_client_restrictions=permit_sasl_authenticated,reject
+    # Only allow authenticated clients to connect (only for submission ports)
+
+  -o smtpd_helo_restrictions=permit_sasl_authenticated,reject_invalid_helo_hostname
+    # Light HELO checks for MUAs (don't block desktop clients with local hostnames)
+
+  -o smtpd_sender_restrictions=permit_sasl_authenticated,reject_non_fqdn_sender,reject_sender_login_mismatch
+    # Prevent address spoofing (login must match sender)
+
   -o smtpd_recipient_restrictions=
+    # Clear global recipient restrictions for submission.
+
   -o smtpd_relay_restrictions=permit_sasl_authenticated,reject
+    # Only relay mail for authenticated users.
+
   -o milter_macro_daemon_name=ORIGINATING
+    # Signal outgoing mail for DKIM signing (only for submission ports)
+
+# --------------------------------------------------------------------
+# Mail Submission (port 465) - implicit TLS (for older clients)
+# --------------------------------------------------------------------
+
+# service type  private unpriv  chroot  wakeup  maxproc command
 smtps     inet  n       -       y       -       -       smtpd
+
   -o syslog_name=postfix/smtps
+    # SMTPS logs
+
   -o smtpd_tls_wrappermode=yes
-  -o smtpd_sasl_auth_enable=yes
-  -o smtpd_reject_unlisted_recipient=no
-  -o smtpd_client_restrictions=$mua_client_restrictions
-  -o smtpd_helo_restrictions=$mua_helo_restrictions
-  -o smtpd_sender_restrictions=$mua_sender_restrictions
+    # Use implicit TLS (SMTPS, TLS from connection start)
+
+  -o smtpd_reject_unlisted_sender=yes
+    # Prevent sending mail from nonexistent local addresses (only for submission ports)
+
+  -o smtpd_client_restrictions=permit_sasl_authenticated,reject
+    # Only allow authenticated clients to connect (only for submission ports)
+
+  -o smtpd_helo_restrictions=permit_sasl_authenticated,reject_invalid_helo_hostname
+    # Light HELO checks for MUAs (don't block desktop clients with local hostnames)
+
+  -o smtpd_sender_restrictions=permit_sasl_authenticated,reject_non_fqdn_sender,reject_sender_login_mismatch
+    # Prevent address spoofing (login must match sender)
+
   -o smtpd_recipient_restrictions=
+    # Clear global recipient restrictions for submission.
+
   -o smtpd_relay_restrictions=permit_sasl_authenticated,reject
+    # Only relay mail for authenticated users.
+
   -o milter_macro_daemon_name=ORIGINATING
-pickup unix n - y 60 1 pickup
-cleanup unix n - y - 0 cleanup
+    # Signal outgoing mail for DKIM signing (only for submission ports)
+
+# --------------------------------------------------------------------
+# Local queue management
+# --------------------------------------------------------------------
+
+pickup    unix  n       -       y       60      1       pickup
+# Picks up new mail from the maildrop queue and injects it into Postfix
+
+cleanup   unix  n       -       y       -       0       cleanup
+# Processes messages from the queue, canonicalizes headers, adds missing headers
+
 qmgr      unix  n       -       n       300     1       qmgr
+# Manages the mail queue, decides which messages to deliver next
+
 tlsmgr    unix  -       -       y       1000?   1       tlsmgr
+# Maintains TLS session cache and handles background TLS tasks
+
+# --------------------------------------------------------------------
+# Delivery agents and support processes
+# --------------------------------------------------------------------
+
 rewrite   unix  -       -       y       -       -       trivial-rewrite
+# Rewrites addresses, applies canonical mapping, and prepares mail for delivery
+
 bounce    unix  -       -       y       -       0       bounce
+# Generates bounce messages for undeliverable mail
+
 defer     unix  -       -       y       -       0       bounce
+# Handles temporary delivery failures (deferred mail)
+
 trace     unix  -       -       y       -       0       bounce
+# Generates trace/debug reports for mail delivery
+
 verify    unix  -       -       y       -       1       verify
+# Checks validity of recipient addresses without sending mail
+
 flush     unix  n       -       y       1000?   0       flush
+# Periodically flushes queued mail for delivery
+
 proxymap  unix  -       -       n       -       -       proxymap
+# Performs lookups on maps (aliases, virtual tables) for other services
+
 proxywrite unix -       -       n       -       1       proxymap
+# Writes proxy map changes (internal support process)
+
 smtp      unix  -       -       y       -       -       smtp
+# Outbound SMTP client process for delivering mail to other MTAs
+
 relay     unix  -       -       y       -       -       smtp
-        -o syslog_name=postfix/$service_name
-#       -o smtp_helo_timeout=5 -o smtp_connect_timeout=5
+  -o syslog_name=postfix/$service_name
+# Handles relay deliveries; logs service-specific names for clarity
+
 showq     unix  n       -       y       -       -       showq
+# Displays the current mail queue (postqueue -p)
+
 error     unix  -       -       y       -       -       error
+# Generates non-delivery error messages for failed mail
+
 retry     unix  -       -       y       -       -       error
+# Handles retry attempts for failed deliveries
+
 discard   unix  -       -       y       -       -       discard
-local     unix  -       n       n       -       -       local
-virtual   unix  -       n       n       -       -       virtual
-lmtp      unix  -       -       y       -       -       lmtp
+# Silently discards mail (used for testing or policy)
+
 anvil     unix  -       -       y       -       1       anvil
+# Tracks client connection rates and limits for DoS protection
+
 scache    unix  -       -       y       -       1       scache
+# Caches TLS sessions for outbound connections to improve performance
+
+# --------------------------------------------------------------------
+# Local & Virtual Delivery
+# --------------------------------------------------------------------
+
+local     unix  -       n       n       -       -       local
+# Delivers mail to local system accounts (UNIX users)
+
+virtual   unix  -       n       n       -       -       virtual
+# Delivers mail to virtual mailboxes defined in Postfix maps
+
+lmtp      unix  -       -       y       -       -       lmtp
+# LMTP handoff to Dovecot for virtual mail delivery
+
+  -o lmtp_data_done_timeout=1200
+    # Increase LMTP DATA timeout to 1200 seconds (long deliveries)
+
+  -o lmtp_destination_recipient_limit=1
+    # Deliver one recipient at a time to ensure accurate LMTP delivery
+
+# --------------------------------------------------------------------
+# External Filters & Legacy Agents (optional)
+# --------------------------------------------------------------------
+
 postlog   unix-dgram n  -       n       -       1       postlogd
+# High-performance logging daemon
+
 maildrop  unix  -       n       n       -       -       pipe
-  flags=DRXhu user=vmail argv=/usr/bin/maildrop -d ${recipient}
+# Deliver mail via Maildrop mail filtering program
+
+  flags=DRhu user=vmail argv=/usr/bin/maildrop -d ${recipient}
+
 uucp      unix  -       n       n       -       -       pipe
+# Deliver mail using legacy UUCP (Unix-to-Unix Copy Program)
+
   flags=Fqhu user=uucp argv=uux -r -n -z -a$sender - $nexthop!rmail ($recipient)
+
 ifmail    unix  -       n       n       -       -       pipe
+# Deliver mail via legacy FTN (FidoNet) using ifmail
+
   flags=F user=ftn argv=/usr/lib/ifmail/ifmail -r $nexthop ($recipient)
+
 bsmtp     unix  -       n       n       -       -       pipe
+# Deliver mail using BSMTP (for legacy or specialized MTAs)
+
   flags=Fq. user=bsmtp argv=/usr/lib/bsmtp/bsmtp -t$nexthop -f$sender $recipient
-scalemail-backend unix -       n       n       -       2       pipe
-  flags=R user=scalemail argv=/usr/lib/scalemail/bin/scalemail-store ${nexthop} ${user} ${extension}
+
 mailman   unix  -       n       n       -       -       pipe
+# Deliver mail to GNU Mailman mailing lists
+
   flags=FRX user=list argv=/usr/lib/mailman/bin/postfix-to-mailman.py ${nexthop} ${user}
+
+# --------------------------------------------------------------------
+# End of master.cf
+# --------------------------------------------------------------------

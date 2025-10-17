@@ -22,7 +22,9 @@ SCRIPTS=(
   "configure-dovecot"
   "add-email-domain"
   "add-email-account"
+  "delete-email-domain"
   "delete-email-account"
+  "purge-email-server"
 )
 
 echo "Installing Email Admin scripts..."

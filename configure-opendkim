@@ -1,8 +1,7 @@
 #!/bin/bash
 
 # --- Configure OpenDKIM Script ---
-# This script installs and configures OpenDKIM for a given domain.
-# It generates a DKIM key and outputs the DNS record for DNS setup.
+# This script installs and configures OpenDKIM.
 
 set -e  # Exit on any error
 
@@ -12,122 +11,283 @@ if [ "$(id -u)" -ne 0 ]; then
     exit 1
 fi
 
-check_and_install() {
-    local REQUIRED_PKGS=("$@")
-    local MISSING_PKGS=()
-
-    # Check each package
-    for pkg in "${REQUIRED_PKGS[@]}"; do
-        if ! dpkg-query -W --showformat='${Status}\n' "$pkg" 2>/dev/null | grep -q "install ok installed"; then
-            echo "$pkg is not installed."
-            MISSING_PKGS+=("$pkg")
-        else
-            echo "$pkg is already installed."
-        fi
-    done
-
-    # If any are missing, ask once and install all together
-    if [ ${#MISSING_PKGS[@]} -ne 0 ]; then
-        echo
-        echo "The following packages are missing: ${MISSING_PKGS[*]}"
-        read -p "Do you want to install them now? (y/n): " response
-        if [[ "$response" =~ ^[Yy]$ ]]; then
-            apt update
-            apt install -y "${MISSING_PKGS[@]}"
-        else
-            echo "Cannot proceed without required packages. Exiting."
-            exit 1
-        fi
-    else
-        echo "All required packages are already installed."
-    fi
-}
+# Include common functions
+source /etc/email-admin/common.sh
 
 # --- Install OpenDKIM ---
-echo "Checking for OpenDKIM..."
-check_and_install "opendkim" "opendkim-tools" "dnsutils"
+echo "Checking for OpenDKIM and tools ..."
+check_and_install "opendkim" "opendkim-tools" "dnsutils" "dns-root-data"
 
-echo "Configuring OpenDKIM..."
+echo "Configuring OpenDKIM ..."
 
 # --- Setup directories and permissions ---
-echo "Setting up directories and files..."
-mkdir -p /etc/opendkim/keys/
-touch /etc/opendkim/KeyTable
-touch /etc/opendkim/SigningTable
+echo "Setting up directories and files ..."
+
+# Create keys directory if it doesn't exist
+if [ ! -d /etc/opendkim/keys ]; then
+    mkdir -p /etc/opendkim/keys
+    chown opendkim:opendkim /etc/opendkim/keys
+    chmod 750 /etc/opendkim/keys
+    echo "Created /etc/opendkim/keys with proper permissions."
+else
+    echo "/etc/opendkim/keys already exists, skipping creation."
+fi
+
+# Create KeyTable if it doesn't exist
+if [ ! -f /etc/opendkim/KeyTable ]; then
+    touch /etc/opendkim/KeyTable
+    chown opendkim:opendkim /etc/opendkim/KeyTable
+    chmod 640 /etc/opendkim/KeyTable
+    echo "Created /etc/opendkim/KeyTable."
+else
+    echo "/etc/opendkim/KeyTable already exists, skipping creation."
+fi
+
+# Create SigningTable if it doesn't exist
+if [ ! -f /etc/opendkim/SigningTable ]; then
+    touch /etc/opendkim/SigningTable
+    chown opendkim:opendkim /etc/opendkim/SigningTable
+    chmod 640 /etc/opendkim/SigningTable
+    echo "Created /etc/opendkim/SigningTable."
+else
+    echo "/etc/opendkim/SigningTable already exists, skipping creation."
+fi
 
 # --- Trusted hosts ---
-echo "Creating trusted hosts file..."
-bash -c "cat > /etc/opendkim/TrustedHosts" <<EOF
+echo "Creating trusted hosts file if missing ..."
+if [ ! -f /etc/opendkim/TrustedHosts ]; then
+    cat > /etc/opendkim/TrustedHosts <<EOF
 127.0.0.1
 localhost
 EOF
+    chown opendkim:opendkim /etc/opendkim/TrustedHosts
+    chmod 640 /etc/opendkim/TrustedHosts
+    echo "Created /etc/opendkim/TrustedHosts with default entries."
+else
+    echo "/etc/opendkim/TrustedHosts already exists, skipping creation."
+fi
 
-# --- Configure OpenDKIM main config (preserving comments) ---
-echo "Writing /etc/opendkim.conf with comments preserved..."
-bash -c "cat > /etc/opendkim.conf" <<EOF
-# This is a basic configuration for signing and verifying. It can easily be
-# adapted to suit a basic installation. See opendkim.conf(5) and
-# /usr/share/doc/opendkim/examples/opendkim.conf.sample for complete
-# documentation of available configuration parameters.
+# --- Configure OpenDKIM main config ---
+echo "Writing /etc/opendkim.conf with comments preserved ..."
+cat > /etc/opendkim.conf <<EOF
+##  Userid userid
+##  	default (none)
+##
+##  Change to user "userid" before starting normal operation?  May include
+##  a group ID as well, separated from the userid by a colon.
 
-Syslog			yes
-SyslogSuccess		yes
-LogWhy			yes
-SoftwareHeader          yes
-SendReports             yes
+UserID opendkim
 
-# Common signing and verification parameters. In Debian, the "From" header is
-# oversigned, because it is often the identity key used by reputation systems
-# and thus somewhat security sensitive.
-Canonicalization	relaxed/simple
-Mode			sv
-SignatureAlgorithm      rsa-sha256
-SubDomains		yes
-OversignHeaders		From
+##  UMask mask
+##      default (system default, usually 022)
+##
+##  Sets the process umask for file creation, controlling default
+##  permissions on files and sockets created by OpenDKIM.
+##
+##  On Debian, OpenDKIM runs as the "opendkim" user. When using a local
+##  socket (e.g., with Postfix), a umask of 007 is recommended so that
+##  members of the "opendkim" group (such as "postfix") can access the
+##  socket. You may need to add the Postfix user to the "opendkim" group.
+##
+##  Example:
+##      UMask   007
 
-# Signing domain, selector, and key (required). For example, perform signing
-# for domain "example.com" with selector "2020" (2020._domainkey.example.com),
-# using the private key stored in /etc/dkimkeys/example.private. More granular
-# setup options can be found in /usr/share/doc/opendkim/README.opendkim.
-#Domain			example.com
-#Selector		2020
-#KeyFile		/etc/dkimkeys/example.private
+UMask 007
+
+##  PidFile filename
+##  	default (none)
+## 
+##  Name of the file where the filter should write its pid before beginning
+##  normal operations.
+
+PidFile /run/opendkim/opendkim.pid
+
+##  Syslog { yes | no }
+##  	default "yes"
+##
+##  Log informational and error activity to syslog?
+
+# Syslog yes
+
+##  SyslogSuccess { yes | no }
+##  	default "no"
+##
+##  Log success activity to syslog?
+
+# SyslogSuccess No
+
+##  LogWhy { yes | no }
+##  	default "no"
+##
+##  If logging is enabled (see Syslog below), issues very detailed logging
+##  about the logic behind the filter's decision to either sign a message
+##  or verify it.  The logic behind the decision is non-trivial and can be
+##  confusing to administrators not familiar with its operation.  A
+##  description of how the decision is made can be found in the OPERATIONS
+##  section of the opendkim(8) man page.  This causes a large increase
+##  in the amount of log data generated for each message, so it should be
+##  limited to debugging use and not enabled for general operation.
+
+# LogWhy no
+
+##  SoftwareHeader { yes | no }
+##  	default "no"
+##
+##  Add a DKIM-Filter header field to messages passing through this filter
+##  to identify messages it has processed.
+
+# SoftwareHeader no
+
+##  SendReports { yes | no }
+##  	default "no"
+##
+##  Specifies whether or not the filter should generate report mail back
+##  to senders when verification fails and an address for such a purpose
+##  is provided.  See opendkim.conf(5) for details.
+
+# SendReports No
+
+##  Canonicalization hdrcanon[/bodycanon]
+##  	default "simple/simple"
+##
+##  Select canonicalizations to use when signing.  If the "bodycanon" is
+##  omitted, "simple" is used.  Valid values for each are "simple" and
+##  "relaxed".
+
+# Canonicalization simple/simple
+
+##  Mode [sv]
+##  	default sv
+##
+##  Indicates which mode(s) of operation should be provided.  "s" means
+##  "sign", "v" means "verify".
+
+# Mode sv
+
+##  SignatureAlgorithm signalg
+##  	default "rsa-sha256"
+##
+##  Signature algorithm to use when generating signatures.  Must be one of
+##  "rsa-sha1", "rsa-sha256", or "ed25519-sha256".
+
+# SignatureAlgorithm rsa-sha256
+
+##  SubDomains { yes | no }
+##  	default "no"
+##
+##  Sign for subdomains as well?
+
+SubDomains yes
+
+##  OversignHeaders dataset
+##  	default (none)
+##
+##  Specifies a set of header fields that should be included in all signature
+##  header lists (the "h=" tag) once more than the number of times they were
+##  actually present in the signed message.  See opendkim.conf(5) for more
+##  information.
+
+# OverSignHeaders header1,header2,...
+OversignHeaders From
+
+##  ExternalIgnoreList filename
+##
+##  Names a file from which a list of externally-trusted hosts is read.
+##  These are hosts which are allowed to send mail through you for signing.
+##  Automatically contains 127.0.0.1.  See man page for file format.
 
 ExternalIgnoreList refile:/etc/opendkim/TrustedHosts
+
+##  InternalHosts dataset
+##  	default "127.0.0.1"
+##
+##  Names a file from which a list of internal hosts is read.  These are
+##  hosts from which mail should be signed rather than verified.
+##  Automatically contains 127.0.0.1.
+
 InternalHosts refile:/etc/opendkim/TrustedHosts
+
+##  KeyTable dataset
+##      default (none)
+##
+##  Defines how OpenDKIM maps a key name to its signing information:
+##  (signing domain, selector, private key).
+##
+##  Format:
+##      keyname domain:selector:private_key
+##
+##  where:
+##    - keyname     : Identifier used in the SigningTable to reference this key.
+##    - domain      : The domain that mail will be signed for (e.g., example.com).
+##    - selector    : The DKIM selector published in DNS (e.g., "mail", "default", "s2025").
+##    - private_key : The PEM/base64 private key itself or, more commonly,
+##                    the full path to a file containing it.
+##
+##  Example:
+##      mail._domainkey.example.com example.com:mail:/etc/opendkim/keys/example.com/mail.private
+##
+##  When using "refile:", entries are read from the specified external file.
+
 KeyTable refile:/etc/opendkim/KeyTable
+
+##  SigningTable dataset
+##      default (none)
+##
+##  Defines how OpenDKIM maps a message’s sender address to a key name
+##  listed in the KeyTable. This determines which private key is used
+##  to sign outgoing mail.
+##
+##  Each entry matches a sender address or pattern to a key name.
+##
+##  Format:
+##      sender-pattern keyname
+##
+##  where:
+##    - sender-pattern : An email address or wildcard pattern that matches
+##                       the sender (e.g., *@example.com or user@example.org).
+##    - keyname        : The identifier defined in the KeyTable for the
+##                       corresponding domain and key.
+##
+##  Examples:
+##      *@example.com mail._domainkey.example.com
+##      user@example.org userkey._domainkey.example.org
+##
+##  When using "refile:", entries are read from the specified external file.
+##  If MultipleSignatures is enabled, multiple matches can result in
+##  more than one DKIM signature being applied.
+
 SigningTable refile:/etc/opendkim/SigningTable
 
-# In Debian, opendkim runs as user "opendkim". A umask of 007 is required when
-# using a local socket with MTAs that access the socket as a non-privileged
-# user (for example, Postfix). You may need to add user "postfix" to group
-# "opendkim" in that case.
-UserID			opendkim
-UMask			007
+##  Socket socketspec
+##
+##  Names the socket where this filter should listen for milter connections
+##  from the MTA.  Required.  Should be in one of these forms:
+##
+##  inet:port@address		to listen on a specific interface
+##  inet:port			to listen on all interfaces
+##  local:/path/to/socket	to listen on a UNIX domain socket
 
-# Socket for the MTA connection (required). If the MTA is inside a chroot jail,
-# it must be ensured that the socket is accessible. In Debian, Postfix runs in
-# a chroot in /var/spool/postfix, therefore a Unix socket would have to be
-# configured as shown on the last line below.
-#Socket			local:/run/opendkim/opendkim.sock
-Socket			inet:8891@localhost
-#Socket			inet:8891
-#Socket			local:/var/spool/postfix/opendkim/opendkim.sock
+Socket local:/run/opendkim/opendkim.sock
 
-PidFile			/run/opendkim/opendkim.pid
+##  TrustAnchorFile filename
+##      default (none)
+##
+##  Specifies a file containing DNSSEC trust anchor data used when
+##  verifying DNS responses. This enables OpenDKIM to perform DNSSEC
+##  validation when querying for DKIM keys.
+##
+##  On Debian, the trust anchor file is provided by the "dns-root-data"
+##  package and located at:
+##      /usr/share/dns/root.key
+##
+##  See the Unbound documentation (https://unbound.net) for details on
+##  the trust anchor file format.
 
-# Hosts for which to sign rather than verify, default is 127.0.0.1. See the
-# OPERATION section of opendkim(8) for more information.
-#InternalHosts		192.168.0.0/16, 10.0.0.0/8, 172.16.0.0/12
-
-# The trust anchor enables DNSSEC. In Debian, the trust anchor file is provided
-# by the package dns-root-data.
-TrustAnchorFile		/usr/share/dns/root.key
-#Nameservers		127.0.0.1
+TrustAnchorFile /usr/share/dns/root.key
 EOF
 
 # --- Enable and start OpenDKIM ---
-echo "Enabling and starting OpenDKIM..."
+echo "Enabling and starting OpenDKIM ..."
 systemctl enable opendkim
 systemctl restart opendkim
 

@@ -122,23 +122,19 @@ email_password_hash=$(doveadm pw -s sha512 -p "${email_password}")
 
 # Create user mail directory
 mkdir -p /var/mail/vhosts/${domain_name}/${email_username}
-chown -R postfix:dovecot /var/mail/vhosts/${domain_name}/${email_username}
-chmod 0770 /var/mail/vhosts/${domain_name}/${email_username}
-
-# Add email account entry
-sh -c "echo \"${domain_email} ${domain_name}/${email_username}\" >> /etc/postfix/virtual_mailbox_maps"
+chown -R vmail:vmail /var/mail/vhosts/${domain_name}/${email_username}
+chmod 0660 /var/mail/vhosts/${domain_name}/${email_username}
 
 # Add aliases
 for a in "${aliases[@]}"; do
     sh -c "echo \"${a} ${domain_email}\" >> /etc/postfix/virtual_alias_maps"
 done
 
-# Add password entry
+# Add user and password entry
 sh -c "echo \"${domain_email}:${email_password_hash}::::::\" >> /etc/dovecot/passwd"
 
 # Update Postfix maps
 postmap /etc/postfix/virtual_alias_maps
-postmap /etc/postfix/virtual_mailbox_maps
 
 # Reload services
 systemctl reload postfix

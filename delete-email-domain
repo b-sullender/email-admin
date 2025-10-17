@@ -1,0 +1,106 @@
+#!/bin/bash
+
+set -e  # Exit on any error
+
+# --- Check root privileges ---
+if [ "$(id -u)" -ne 0 ]; then
+    echo "Please run as root 'sudo delete-email-domain'"
+    exit 1
+fi
+
+# --- Prompt for domain ---
+read -p "Enter the domain name to delete (e.g. example.com): " domain_name
+
+if [[ -z "$domain_name" ]]; then
+    echo "Error: Domain name cannot be empty."
+    exit 1
+fi
+
+echo ""
+echo "=== Deleting email domain: ${domain_name} ==="
+
+# --- Confirm before deletion ---
+echo ""
+echo "You are about to remove all configurations for '${domain_name}':"
+echo "  - DKIM keys"
+echo "  - Postfix domain and aliases"
+echo "  - Dovecot user accounts"
+echo ""
+read -p "Are you sure you want to continue? (y/N): " confirm
+if [[ ! "$confirm" =~ ^[Yy]$ ]]; then
+    echo "Aborted."
+    exit 0
+fi
+
+# --- Remove DKIM keys directory ---
+if [ -d "/etc/opendkim/keys/${domain_name}" ]; then
+    echo "Removing DKIM keys directory ..."
+    rm -rf "/etc/opendkim/keys/${domain_name}"
+else
+    echo "No DKIM key directory found for ${domain_name}."
+fi
+
+# --- Clean from KeyTable ---
+if [ -f /etc/opendkim/KeyTable ]; then
+    echo "Removing from KeyTable ..."
+    sed -i "/${domain_name}/d" /etc/opendkim/KeyTable
+fi
+
+# --- Clean from SigningTable ---
+if [ -f /etc/opendkim/SigningTable ]; then
+    echo "Removing from SigningTable ..."
+    sed -i "/${domain_name}/d" /etc/opendkim/SigningTable
+fi
+
+# --- Clean from TrustedHosts ---
+if [ -f /etc/opendkim/TrustedHosts ]; then
+    echo "Removing from TrustedHosts ..."
+    sed -i "/${domain_name}/d" /etc/opendkim/TrustedHosts
+fi
+
+# --- Clean from Postfix virtual_mailbox_domains ---
+if [ -f /etc/postfix/virtual_mailbox_domains ]; then
+    echo "Removing from Postfix virtual_mailbox_domains ..."
+    sed -i "/${domain_name}/d" /etc/postfix/virtual_mailbox_domains
+fi
+
+# --- Remove all aliases for this domain ---
+if [ -f /etc/postfix/virtual_alias_maps ]; then
+    echo "Removing aliases for domain ${domain_name} ..."
+    # Matches any line where the alias or target email contains '@domain'
+    sed -i "\|@${domain_name}[[:space:]]|d" /etc/postfix/virtual_alias_maps
+    sed -i "\|[[:space:]]@${domain_name}[[:space:]]*$|d" /etc/postfix/virtual_alias_maps
+fi
+
+# --- Remove Dovecot users for this domain ---
+if [ -f /etc/dovecot/passwd ]; then
+    echo "Removing Dovecot users for domain ${domain_name} ..."
+    # Remove any line that begins with a username ending in @domain
+    sed -i "/@${domain_name}:/d" /etc/dovecot/passwd
+fi
+
+# --- Reload OpenDKIM ---
+echo "Reloading OpenDKIM ..."
+systemctl reload opendkim
+
+# --- Reload Postfix ---
+echo "Reloading Postfix ..."
+postmap /etc/postfix/virtual_mailbox_domains 2>/dev/null || true
+postmap /etc/postfix/virtual_alias_maps 2>/dev/null || true
+systemctl reload postfix
+
+# --- Reload Dovecot ---
+echo "Reloading Dovecot ..."
+systemctl reload dovecot
+
+echo ""
+echo "Domain '${domain_name}' has been removed from:"
+echo "  - /etc/opendkim/keys/${domain_name}"
+echo "  - /etc/opendkim/KeyTable"
+echo "  - /etc/opendkim/SigningTable"
+echo "  - /etc/opendkim/TrustedHosts"
+echo "  - /etc/postfix/virtual_mailbox_domains"
+echo "  - /etc/postfix/virtual_alias_maps"
+echo "  - /etc/dovecot/passwd"
+echo ""
+echo "Finished deleting domain!"

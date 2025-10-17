@@ -34,9 +34,6 @@ if [[ ! "$confirm" =~ ^[Yy]$ ]]; then
     exit 1
 fi
 
-# Remove entries from Postfix virtual mailbox map
-sed -i "\|^${domain_email}[[:space:]]|d" /etc/postfix/virtual_mailbox_maps
-
 # Remove all aliases pointing to this email
 sed -i "\|[[:space:]]${domain_email}[[:space:]]*$|d" /etc/postfix/virtual_alias_maps
 
@@ -45,7 +42,6 @@ sed -i "/^${email_username}:/d" /etc/dovecot/passwd
 
 # Update Postfix maps
 postmap /etc/postfix/virtual_alias_maps
-postmap /etc/postfix/virtual_mailbox_maps
 
 # Remove user mail directory
 rm -rf /var/mail/vhosts/${domain_name}/${email_username}

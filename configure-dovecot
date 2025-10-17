@@ -11,64 +11,103 @@ if [ "$(id -u)" -ne 0 ]; then
     exit 1
 fi
 
-check_and_install() {
-    local REQUIRED_PKGS=("$@")
-    local MISSING_PKGS=()
-
-    # Check each package
-    for pkg in "${REQUIRED_PKGS[@]}"; do
-        if ! dpkg-query -W --showformat='${Status}\n' "$pkg" 2>/dev/null | grep -q "install ok installed"; then
-            echo "$pkg is not installed."
-            MISSING_PKGS+=("$pkg")
-        else
-            echo "$pkg is already installed."
-        fi
-    done
-
-    # If any are missing, ask once and install all together
-    if [ ${#MISSING_PKGS[@]} -ne 0 ]; then
-        echo
-        echo "The following packages are missing: ${MISSING_PKGS[*]}"
-        read -p "Do you want to install them now? (y/n): " response
-        if [[ "$response" =~ ^[Yy]$ ]]; then
-            apt update
-            apt install -y "${MISSING_PKGS[@]}"
-        else
-            echo "Cannot proceed without required packages. Exiting."
-            exit 1
-        fi
-    else
-        echo "All required packages are already installed."
-    fi
-}
+# Include common functions
+source /etc/email-admin/common.sh
 
 # --- Install Dovecot ---
-echo "Checking for Dovecot..."
-check_and_install "dovecot-core" "dovecot-imapd" "dovecot-lmtpd" "dovecot-mysql"
+echo "Checking for Dovecot ..."
+check_and_install "dovecot-core" "dovecot-imapd" "dovecot-pop3d" "dovecot-lmtpd" "dovecot-mysql"
 
 # Prompt for domain
-read -p "Enter your domain name (e.g. example.com): " domain_name
+echo ""
+echo "Enter the primary domain for this mail server."
+echo "This domain will be used for SSL/TLS certificates and Dovecot configuration."
+echo "It does not necessarily need to be a domain that will receive mail directly."
+echo ""
+read -p "Enter domain (e.g., example.com): " domain_name
 
 if [[ -z "$domain_name" ]]; then
     echo "Error: Domain name cannot be empty."
     exit 1
 fi
 
-echo "Configuring Dovecot for domain: ${domain_name}"
+# Prompt for hostname
+cat <<EOF
+Enter the hostname for this mail server (optional)
 
-# --- Copy conf.d files ---
+This is useful if your domain uses multiple mail servers.
+For example, you might have:
+  - 'mail' for mail.example.com
+  - 'mx1' for mx1.example.com
+  - 'mx2' for mx2.example.com
+
+If left empty, the domain will be used without a hostname.
+
+EOF
+read -p "Hostname (e.g. mail): " hostname
+
+# If hostname is not empty, prepend it to the domain_name
+if [[ -n "$hostname" ]]; then
+    full_domain_name="${hostname}.${domain_name}"
+else
+    full_domain_name=${domain_name}
+fi
+
+echo "Configuring Dovecot for domain: ${full_domain_name}"
+
+# Ensure 'vmail' user exists
+if ! id "vmail" &>/dev/null; then
+    echo "Creating 'vmail' user ..."
+    if ! useradd -r -m -d /var/mail -s /sbin/nologin vmail; then
+        echo "Failed to create user 'vmail'." >&2
+        exit 1
+    fi
+fi
+
+# Retrieve the UID after ensuring user existence
+vmail_uid=$(id -u vmail)
+echo "Using vmail UID: ${vmail_uid}"
+
+# Ensure /var/mail/vhosts exists
+maildir="/var/mail/vhosts"
+echo "Checking for $maildir"
+if [ ! -d "$maildir" ]; then
+    echo "Creating $maildir ..."
+    mkdir -p "$maildir"
+fi
+chown -R vmail:vmail "$maildir"
+chmod 750 "$maildir"
+
+# Ensure /etc/dovecot/passwd exists
+passwd_file="/etc/dovecot/passwd"
+echo "Checking for $passwd_file"
+if [ ! -f "$passwd_file" ]; then
+    echo "Creating $passwd_file ..."
+    mkdir -p /etc/dovecot
+    touch "$passwd_file"
+fi
+chown dovecot:dovecot "$passwd_file"
+chmod 640 "$passwd_file"
+
+# --- Check for conf.d files ---
+echo "Checking for config files ..."
 if [[ ! -d /etc/email-admin/dovecot/conf.d ]]; then
     echo "Error: Local directory '/etc/email-admin/dovecot/conf.d/' not found."
     exit 1
 fi
 
-echo "Copying configuration files to /etc/dovecot/conf.d/..."
+# --- Copy conf.d files ---
+echo "Copying configuration files to /etc/dovecot/conf.d/ ..."
 cp -r /etc/email-admin/dovecot/conf.d/* /etc/dovecot/conf.d/
 
+# Get TLS certificates
+obtain_cert "$full_domain_name"
+
+# Get dovecot user id
 dovecot_uid=$(id -u dovecot)
 
+# Append first_valid_uid and last_valid_uid to configuration
 sudo tee -a "/etc/dovecot/conf.d/auth-system.conf.ext" > /dev/null <<EOF
-
 
 # -----------------------------------------------------------------
 # first_valid_uid: The lowest UID value that Dovecot is allowed
@@ -85,7 +124,7 @@ last_valid_uid = ${dovecot_uid}
 EOF
 
 # --- Write SSL configuration ---
-echo "Writing /etc/dovecot/conf.d/10-ssl.conf..."
+echo "Writing /etc/dovecot/conf.d/10-ssl.conf ..."
 bash -c "cat > /etc/dovecot/conf.d/10-ssl.conf" <<EOF
 ##
 ## SSL settings
@@ -98,8 +137,8 @@ ssl = yes
 # dropping root privileges, so keep the key file unreadable by anyone but
 # root. Included doc/mkcert.sh can be used to easily generate self-signed
 # certificate, just make sure to update the domains in dovecot-openssl.cnf
-ssl_cert = </etc/letsencrypt/live/${domain_name}/fullchain.pem
-ssl_key = </etc/letsencrypt/live/${domain_name}/privkey.pem
+ssl_cert = <${tls_fullchain}
+ssl_key = <${tls_privkey}
 
 # If key file is password protected, give the password here. Alternatively
 # give it when starting dovecot with -p parameter. Since this file is often
@@ -173,10 +212,12 @@ ssl_min_protocol = TLSv1.2
 EOF
 
 # --- Restart Dovecot ---
-echo "Restarting Dovecot..."
+echo "Restarting Dovecot ..."
 systemctl restart dovecot
 
-echo "Dovecot has been configured for domain: ${domain_name}"
+echo ""
+echo "Dovecot has been configured for domain: ${full_domain_name}"
 echo "Configuration files copied to: /etc/dovecot/conf.d/"
 echo "SSL configuration saved to: /etc/dovecot/conf.d/10-ssl.conf"
-echo "Done."
+echo ""
+echo "Dovecot setup complete!"
