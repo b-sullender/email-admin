@@ -29,9 +29,13 @@ sudo configure-postfix
 
 ### Managing Domains
 
+Add a new domain:
+
 ```bash
 sudo add-email-domain
 ```
+
+Delete a domain:
 
 ```bash
 sudo delete-email-domain
