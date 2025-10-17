@@ -4,7 +4,7 @@
 
 ## Features
 - Install and set up a complete email server
-- Configure **Dovecot**, **OpenDKIM** and **Postfix**
+- Configure **OpenDKIM**, **Postfix**, and **Dovecot**
 - Easily add or delete domains & email accounts
 
 ## Installation
@@ -22,9 +22,9 @@ cd ../ && rm -rf email-admin
 After installation, configure the services:
 
 ```bash
-sudo configure-dovecot
 sudo configure-opendkim
 sudo configure-postfix
+sudo configure-dovecot
 ```
 
 ### Managing Domains
