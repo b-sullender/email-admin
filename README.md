@@ -22,15 +22,19 @@ cd ../ && rm -rf email-admin
 After installation, configure the services:
 
 ```bash
+sudo configure-dovecot
 sudo configure-opendkim
 sudo configure-postfix
-sudo configure-dovecot
 ```
 
-Then add your domains:
+### Managing Domains
 
 ```bash
 sudo add-email-domain
+```
+
+```bash
+sudo delete-email-domain
 ```
 
 ### Managing Email Accounts
