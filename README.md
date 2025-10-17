@@ -4,7 +4,7 @@
 
 ## Features
 - Install and set up a complete email server
-- Configure **Postfix**, **Dovecot**, and **OpenDKIM**
+- Configure **Dovecot**, **OpenDKIM** and **Postfix**
 - Easily add or delete domains & email accounts
 
 ## Installation
