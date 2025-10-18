@@ -54,7 +54,6 @@ else
 fi
 
 # --- Trusted hosts ---
-echo "Creating trusted hosts file if missing ..."
 if [ ! -f /etc/opendkim/TrustedHosts ]; then
     cat > /etc/opendkim/TrustedHosts <<EOF
 127.0.0.1
@@ -66,6 +65,12 @@ EOF
 else
     echo "/etc/opendkim/TrustedHosts already exists, skipping creation."
 fi
+
+# Debian: Postfix runs in a chroot at /var/spool/postfix
+echo "Creating OpenDKIM socket directory inside Postfix chroot ..."
+mkdir -p /var/spool/postfix/var/run/opendkim
+chown opendkim:opendkim /var/spool/postfix/var/run/opendkim
+chmod 770 /var/spool/postfix/var/run/opendkim
 
 # --- Configure OpenDKIM main config ---
 echo "Writing /etc/opendkim.conf with comments preserved ..."
@@ -267,7 +272,7 @@ SigningTable refile:/etc/opendkim/SigningTable
 ##  inet:port			to listen on all interfaces
 ##  local:/path/to/socket	to listen on a UNIX domain socket
 
-Socket local:/run/opendkim/opendkim.sock
+Socket local:/var/spool/postfix/var/run/opendkim/opendkim.sock
 
 ##  TrustAnchorFile filename
 ##      default (none)
