@@ -16,7 +16,7 @@ source /etc/email-admin/common.sh
 
 # --- Install Dovecot ---
 echo "Checking for Dovecot ..."
-check_and_install "dovecot-core" "dovecot-imapd" "dovecot-pop3d" "dovecot-lmtpd" "dovecot-mysql"
+check_and_install "dovecot-core" "dovecot-imapd" "dovecot-lmtpd" "dovecot-mysql"
 
 # Prompt for domain
 echo ""

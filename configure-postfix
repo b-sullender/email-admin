@@ -257,9 +257,6 @@ smtpd_recipient_restrictions = permit_mynetworks permit_sasl_authenticated rejec
 # Virtual mail (internet domains)
 # --------------------------------------------------------------------
 
-# Base directory for virtual mailboxes
-virtual_mailbox_base = /var/mail/vhosts
-
 # List of domains served by this virtual mail host
 virtual_mailbox_domains = hash:/etc/postfix/virtual_mailbox_domains
 # Using a MySQL database:
@@ -269,15 +266,6 @@ virtual_mailbox_domains = hash:/etc/postfix/virtual_mailbox_domains
 virtual_alias_maps = hash:/etc/postfix/virtual_alias_maps
 # Using a MySQL database:
 #virtual_alias_maps = mysql:/etc/postfix/mysql_virtual_alias_maps.cf
-
-# Minimum UID for virtual mail delivery
-virtual_minimum_uid = ${postfix_uid}
-
-# UID for virtual mail delivery
-virtual_uid_maps = static:${postfix_uid}
-
-# GID for virtual mail delivery
-virtual_gid_maps = static:${postfix_gid}
 
 # Transport for virtual mail: LMTP handoff to Dovecot
 virtual_transport = lmtp:unix:private/dovecot-lmtp
