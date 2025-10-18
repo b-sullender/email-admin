@@ -33,7 +33,7 @@ fi
 
 # Prompt for hostname
 cat <<EOF
-Enter the hostname for this mail server (optional)
+Enter the hostname for this mail room server (optional)
 
 This is useful if your domain uses multiple mail servers.
 For example, you might have:
@@ -48,12 +48,16 @@ read -p "Hostname (e.g. mail): " hostname
 
 # If hostname is not empty, prepend it to the domain_name
 if [[ -n "$hostname" ]]; then
-    full_domain_name="${hostname}.${domain_name}"
+    FQDN="${hostname}.${domain_name}"
 else
-    full_domain_name=${domain_name}
+    FQDN=${domain_name}
 fi
 
-echo "Configuring Dovecot for domain: ${full_domain_name}"
+echo "Configuring Dovecot for: ${FQDN}"
+
+# Set /etc/mailroom
+echo "Saving FQDN to /etc/mailroom"
+echo "$FQDN" > /etc/mailroom
 
 # Ensure /var/mail/vhosts exists
 maildir="/var/mail/vhosts"
@@ -112,7 +116,7 @@ echo "Copying configuration files to /etc/dovecot/conf.d/ ..."
 cp -r /etc/email-admin/dovecot/conf.d/* /etc/dovecot/conf.d/
 
 # Get TLS certificates
-obtain_cert "$full_domain_name"
+obtain_cert "$FQDN"
 
 # Get dovecot user id
 dovecot_uid=$(id -u dovecot)
@@ -210,7 +214,7 @@ echo "Restarting Dovecot ..."
 systemctl restart dovecot
 
 echo ""
-echo "Dovecot has been configured for domain: ${full_domain_name}"
+echo "Dovecot has been configured for: ${FQDN}"
 echo "Configuration files copied to: /etc/dovecot/conf.d/"
 echo "SSL configuration saved to: /etc/dovecot/conf.d/10-ssl.conf"
 echo ""

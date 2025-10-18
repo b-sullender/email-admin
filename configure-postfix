@@ -48,15 +48,19 @@ read -p "Hostname (e.g. mail): " hostname
 
 # If hostname is not empty, prepend it to the domain_name
 if [[ -n "$hostname" ]]; then
-    full_domain_name="${hostname}.${domain_name}"
+    FQDN="${hostname}.${domain_name}"
 else
-    full_domain_name=${domain_name}
+    FQDN=${domain_name}
 fi
 
-echo "Configuring Postfix for domain: ${full_domain_name}"
+echo "Configuring Postfix for: ${FQDN}"
 
-echo "Saving MX (mail exchange) name to /etc/mx_names"
-echo "$full_domain_name" > /etc/mx_names
+# Set /etc/mailname
+echo "Saving FQDN to /etc/mailname"
+echo "$FQDN" > /etc/mailname
+
+echo "Saving FQDN / MX (mail exchange) name to /etc/mx_names"
+echo "$FQDN" > /etc/mx_names
 
 # Get the local system hostname
 # This is the hostname configured on this machine,
@@ -109,10 +113,6 @@ fi
 echo "Using reverse DNS PTR: $reverse_dns_ptr"
 echo ""
 
-# Set /etc/mailname to reverse DNS PTR
-echo "Saving reverse DNS PTR name to /etc/mailname"
-echo "$reverse_dns_ptr" > /etc/mailname
-
 # --- Check for static configuration files ---
 if [[ ! -d /etc/email-admin/postfix ]]; then
     echo "Error: Local directory '/etc/email-admin/postfix/' not found."
@@ -124,7 +124,7 @@ echo "Copying configuration files to /etc/postfix/ ..."
 cp -r /etc/email-admin/postfix/* /etc/postfix/
 
 # Get TLS certificates
-obtain_cert "$full_domain_name"
+obtain_cert "$FQDN"
 
 # Get postfix user id and group id
 postfix_uid=$(id -u postfix)
@@ -145,7 +145,7 @@ cat > /etc/postfix/main.cf <<EOF
 myorigin = ${local_hostname}
 
 # Fully qualified hostname of this mail server, used in SMTP HELO/EHLO
-myhostname = ${full_domain_name}
+myhostname = ${FQDN}
 
 # Text shown when a client connects via SMTP
 smtpd_banner = ${reverse_dns_ptr} ESMTP \$mail_name (Debian/GNU)
@@ -320,7 +320,7 @@ postmap /etc/postfix/virtual_mailbox_domains
 postmap /etc/postfix/virtual_alias_maps
 systemctl restart postfix
 
-echo "Postfix has been configured for domain: ${full_domain_name}"
+echo "Postfix has been configured for: ${FQDN}"
 echo "Mailbox Domains: /etc/postfix/virtual_mailbox_domains"
 echo "Alias Maps: /etc/postfix/virtual_alias_maps"
 echo "TLS Certificate: ${tls_cert}"
@@ -330,7 +330,7 @@ echo "OpenDKIM milter: local:/var/run/opendkim/opendkim.sock"
 echo ""
 echo "DNS Records"
 echo "------------------------------------------------------"
-echo "Host/Name: ${full_domain_name}"
+echo "Host/Name: ${FQDN}"
 echo "Type: A"
 echo "Value: ${public_ip}"
 echo "------------------------------------------------------"
