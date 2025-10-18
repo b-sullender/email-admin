@@ -270,13 +270,6 @@ virtual_alias_maps = hash:/etc/postfix/virtual_alias_maps
 # Using a MySQL database:
 #virtual_alias_maps = mysql:/etc/postfix/mysql_virtual_alias_maps.cf
 
-# Map of virtual mailboxes validated via Dovecot auth socket
-virtual_mailbox_maps = proxy:unix:private/auth
-# Connecting to Dovecot remotely for auth (TCP socket):
-#virtual_mailbox_maps = proxy:tcp:127.0.0.1:11125
-# Map of virtual mailboxes validated via MySQL query
-#virtual_mailbox_maps = mysql:/etc/postfix/mysql_virtual_mailbox_maps.cf
-
 # Minimum UID for virtual mail delivery
 virtual_minimum_uid = ${postfix_uid}
 
