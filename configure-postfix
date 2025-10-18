@@ -148,7 +148,7 @@ myorigin = ${local_hostname}
 myhostname = ${full_domain_name}
 
 # Text shown when a client connects via SMTP
-smtpd_banner = ${reverse_dns_ptr} ESMTP $mail_name (Debian/GNU)
+smtpd_banner = ${reverse_dns_ptr} ESMTP \$mail_name (Debian/GNU)
 
 # --------------------------------------------------------------------
 # General mail system behavior
@@ -214,7 +214,7 @@ smtp_tls_security_level = encrypt
 smtp_tls_CApath = /etc/ssl/certs
 
 # Cache database for TLS sessions
-smtp_tls_session_cache_database = btree:${data_directory}/smtp_scache
+smtp_tls_session_cache_database = btree:\${data_directory}/smtp_scache
 
 # --------------------------------------------------------------------
 # SASL authentication via Dovecot
@@ -281,7 +281,7 @@ smtpd_milters = local:/var/run/opendkim/opendkim.sock
 #smtpd_milters = inet:localhost:8891
 
 # Non-SMTP mail also passed to the same milter
-non_smtpd_milters = $smtpd_milters
+non_smtpd_milters = \$smtpd_milters
 
 # Action to take if milter fails
 milter_default_action = accept
