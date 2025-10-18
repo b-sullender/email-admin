@@ -79,6 +79,12 @@ if [ -f /etc/dovecot/passwd ]; then
     sed -i "/@${domain_name}:/d" /etc/dovecot/passwd
 fi
 
+# --- Remove Autoconfig ---
+AUTOCONFIG_DIR="/var/www/.well-known/autoconfig/mail/${domain_name}"
+if [ -d $AUTOCONFIG_DIR ]; then
+    rm -R $AUTOCONFIG_DIR
+fi
+
 # --- Reload OpenDKIM ---
 echo "Reloading OpenDKIM ..."
 systemctl reload opendkim

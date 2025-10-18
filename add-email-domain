@@ -8,13 +8,21 @@ if [ "$(id -u)" -ne 0 ]; then
     exit 1
 fi
 
-# --- Read /etc/mailroom ---
+# --- Read /etc/mailroom (Dovecot server) ---
 MAILROOM_FILE="/etc/mailroom"
 if [ ! -f "$MAILROOM_FILE" ]; then
     echo "Error: $MAILROOM_FILE not found!"
     exit 1
 fi
 mailroom_fqdn=$(< "$MAILROOM_FILE")
+
+# --- Read /etc/mailname (Postfix server) ---
+MAILNAME_FILE="/etc/mailname"
+if [ ! -f "$MAILNAME_FILE" ]; then
+    echo "Error: $MAILNAME_FILE not found!"
+    exit 1
+fi
+mailname_fqdn=$(< "$MAILNAME_FILE")
 
 # Prompt for domain
 read -p "Enter your domain name (e.g. example.com): " domain_name
@@ -103,7 +111,7 @@ cat > "$AUTOCONFIG_FILE" <<EOF
 
     <!-- Outgoing SMTP server -->
     <outgoingServer type="smtp">
-      <hostname>${mailroom_fqdn}</hostname>
+      <hostname>${mailname_fqdn}</hostname>
       <port>465</port>
       <socketType>SSL</socketType>
       <authentication>password-cleartext</authentication>

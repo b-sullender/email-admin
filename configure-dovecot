@@ -38,8 +38,7 @@ Enter the hostname for this mail room server (optional)
 This is useful if your domain uses multiple mail servers.
 For example, you might have:
   - 'mail' for mail.example.com
-  - 'mx1' for mx1.example.com
-  - 'mx2' for mx2.example.com
+  - 'mroom' for mroom.example.com
 
 If left empty, the domain will be used without a hostname.
 

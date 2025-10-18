@@ -30,11 +30,13 @@ fi
 echo "Removing email packages..."
 apt purge -y postfix postfix-mysql opendkim opendkim-tools dovecot-core dovecot-imapd dovecot-pop3d dovecot-lmtpd dovecot-mysql
 
-echo "Removing /etc/mx_names"
-rm /etc/mx_names
+if [ -f /etc/mx_names ]; then
+    echo "Removing /etc/mx_names"
+    rm /etc/mx_names
+fi
 
 echo "Removing configuration directories..."
-for dir in /etc/postfix /etc/opendkim /etc/dovecot /var/mail/vhosts; do
+for dir in /etc/postfix /var/spool/postfix /etc/opendkim /etc/dovecot /var/mail/vhosts /var/www/.well-known; do
     if [ -d "$dir" ]; then
         echo "Deleting $dir"
         rm -rf "$dir"
