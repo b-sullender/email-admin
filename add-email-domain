@@ -53,7 +53,7 @@ echo ""
 echo "Enter the email for DKIM/SPF failure reports."
 echo ""
 
-read -p "Enter email (e.g., postmaster@example.com): " dmarc_ruf
+read -p "Enter email (e.g., postmaster@${domain_name}): " dmarc_ruf
 
 if [[ -z "$dmarc_ruf" ]]; then
     echo "Error: Email cannot be empty."

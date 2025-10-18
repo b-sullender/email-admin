@@ -321,10 +321,11 @@ postmap /etc/postfix/virtual_alias_maps
 systemctl restart postfix
 
 echo "Postfix has been configured for domain: ${full_domain_name}"
-echo "virtual_mailbox_domains: /etc/postfix/virtual_mailbox_domains"
-echo "virtual_alias_maps: /etc/postfix/virtual_alias_maps"
-echo "TLS cert: ${tls_cert}"
-echo "TLS key: ${tls_key}"
+echo "Mailbox Domains: /etc/postfix/virtual_mailbox_domains"
+echo "Alias Maps: /etc/postfix/virtual_alias_maps"
+echo "TLS Certificate: ${tls_cert}"
+echo "TLS Private Key: ${tls_privkey}"
+echo "TLS CA Chain: ${tls_chain}"
 echo "OpenDKIM milter: local:/var/run/opendkim/opendkim.sock"
 echo ""
 echo "DNS Records"
