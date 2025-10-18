@@ -33,9 +33,9 @@ fi
 
 # Prompt for hostname
 cat <<EOF
-Enter the hostname for this mail server (optional)
+Enter the hostname for this mail exchange server (optional)
 
-This is useful if your domain uses multiple mail servers.
+This is useful if your mail room (Dovecot) uses multiple mail exchange servers.
 For example, you might have:
   - 'mail' for mail.example.com
   - 'mx1' for mx1.example.com
@@ -55,8 +55,8 @@ fi
 
 echo "Configuring Postfix for domain: ${full_domain_name}"
 
-echo "Saving MX name to /etc/email-admin/mx_name"
-echo "$full_domain_name" > /etc/email-admin/mx_name
+echo "Saving MX (mail exchange) name to /etc/mx_names"
+echo "$full_domain_name" > /etc/mx_names
 
 # Get the local system hostname
 # This is the hostname configured on this machine,
@@ -142,7 +142,7 @@ cat > /etc/postfix/main.cf <<EOF
 # --------------------------------------------------------------------
 
 # Domain appended to locally submitted mail without a domain
-myorigin = ${full_domain_name}
+myorigin = ${local_hostname}
 
 # Fully qualified hostname of this mail server, used in SMTP HELO/EHLO
 myhostname = ${full_domain_name}
@@ -172,12 +172,6 @@ reject_unlisted_recipient = yes
 # --------------------------------------------------------------------
 # Local mail (system users)
 # --------------------------------------------------------------------
-
-# Map of aliases for local UNIX accounts
-alias_maps = hash:/etc/aliases
-
-# Database for alias lookups
-alias_database = hash:/etc/aliases
 
 # Domains delivered locally (system users)
 mydestination = ${local_hostname}, localhost.localdomain, localhost
@@ -328,7 +322,6 @@ systemctl restart postfix
 
 echo "Postfix has been configured for domain: ${full_domain_name}"
 echo "virtual_mailbox_domains: /etc/postfix/virtual_mailbox_domains"
-echo "virtual_mailbox_maps: proxy:unix:private/auth"
 echo "virtual_alias_maps: /etc/postfix/virtual_alias_maps"
 echo "TLS cert: ${tls_cert}"
 echo "TLS key: ${tls_key}"

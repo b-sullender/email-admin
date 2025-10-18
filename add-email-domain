@@ -83,15 +83,15 @@ print_mx_block() {
     echo ""
 }
 # Check if main MX file exists
-if [ -f /etc/email-admin/mx_name ]; then
+if [ -f /etc/mx_names ]; then
     while IFS= read -r mx; do
         print_mx_block "$mx"
-    done < /etc/email-admin/mx_name
+    done < /etc/mx_names
 else
-    echo "MX record file not found: /etc/email-admin/mx_name"
+    echo "MX record file not found: /etc/mx_names"
 fi
 echo "If the mail domain has additional servers, add them manually (e.g., mx1, mx2)."
-echo "Optional: You can list extra MX servers in /etc/email-admin/mx_name (one per line) for future automation."
+echo "Optional: You can list extra MX servers in /etc/mx_names (one per line) for future automation."
 echo ""
 
 echo "------------------------------------------------------"
