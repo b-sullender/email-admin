@@ -123,7 +123,7 @@ email_password_hash=$(doveadm pw -s sha512 -p "${email_password}")
 # Create user mail directory
 mkdir -p /var/mail/vhosts/${domain_name}/${email_username}
 chown -R vmail:vmail /var/mail/vhosts/${domain_name}/${email_username}
-chmod 0660 /var/mail/vhosts/${domain_name}/${email_username}
+chmod 2770 /var/mail/vhosts/${domain_name}/${email_username}
 
 # Add aliases
 for a in "${aliases[@]}"; do

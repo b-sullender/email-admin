@@ -205,7 +205,7 @@ inet_protocols = all
 smtpd_tls_cert_file = ${tls_cert}
 
 # Incoming SMTP server private key
-smtpd_tls_key_file = ${tls_key}
+smtpd_tls_key_file = ${tls_privkey}
 
 # CA chain for TLS verification
 smtpd_tls_CAfile = ${tls_chain}

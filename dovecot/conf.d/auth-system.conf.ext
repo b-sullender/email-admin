@@ -93,5 +93,4 @@ passdb {
 userdb {
   driver = passwd-file
   args = /etc/dovecot/passwd
-  default_fields = uid=dovecot gid=dovecot
 }

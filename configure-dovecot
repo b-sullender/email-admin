@@ -55,19 +55,6 @@ fi
 
 echo "Configuring Dovecot for domain: ${full_domain_name}"
 
-# Ensure 'vmail' user exists
-if ! id "vmail" &>/dev/null; then
-    echo "Creating 'vmail' user ..."
-    if ! useradd -r -m -d /var/mail -s /sbin/nologin vmail; then
-        echo "Failed to create user 'vmail'." >&2
-        exit 1
-    fi
-fi
-
-# Retrieve the UID after ensuring user existence
-vmail_uid=$(id -u vmail)
-echo "Using vmail UID: ${vmail_uid}"
-
 # Ensure /var/mail/vhosts exists
 maildir="/var/mail/vhosts"
 echo "Checking for $maildir"
@@ -76,7 +63,31 @@ if [ ! -d "$maildir" ]; then
     mkdir -p "$maildir"
 fi
 chown -R vmail:vmail "$maildir"
-chmod 750 "$maildir"
+chmod 2770 "$maildir"
+
+# Ensure 'vmail' user exists
+if ! id "vmail" &>/dev/null; then
+    echo "Creating 'vmail' user ..."
+    if ! useradd -r -m -d /var/mail/vmail -s /sbin/nologin vmail; then
+        echo "Failed to create user 'vmail'." >&2
+        exit 1
+    fi
+fi
+
+# Ensure 'vmail' group exists
+if ! getent group vmail >/dev/null; then
+    echo "Creating 'vmail' group ..."
+    groupadd vmail
+fi
+
+# Retrieve UID and GID
+vmail_uid=$(id -u vmail)
+vmail_gid=$(getent group vmail | cut -d: -f3)
+echo "Using vmail UID: ${vmail_uid}, GID: ${vmail_gid}"
+
+# Add dovecot user to the vmail group
+echo "Adding dovecot user to vmail group ..."
+usermod -aG vmail dovecot
 
 # Ensure /etc/dovecot/passwd exists
 passwd_file="/etc/dovecot/passwd"
@@ -105,23 +116,6 @@ obtain_cert "$full_domain_name"
 
 # Get dovecot user id
 dovecot_uid=$(id -u dovecot)
-
-# Append first_valid_uid and last_valid_uid to configuration
-sudo tee -a "/etc/dovecot/conf.d/auth-system.conf.ext" > /dev/null <<EOF
-
-# -----------------------------------------------------------------
-# first_valid_uid: The lowest UID value that Dovecot is allowed
-# to use for mail delivery or authentication lookups.
-# Setting this to Dovecot's own UID ensures it won't try to
-# access other system users' mailboxes.
-first_valid_uid = ${dovecot_uid}
-
-# last_valid_uid: The highest UID value Dovecot can use.
-# By setting this equal to dovecot_uid, it restricts Dovecot
-# strictly to its own UID range for additional security.
-last_valid_uid = ${dovecot_uid}
-# -----------------------------------------------------------------
-EOF
 
 # --- Write SSL configuration ---
 echo "Writing /etc/dovecot/conf.d/10-ssl.conf ..."

@@ -19,11 +19,15 @@ fi
 echo "Creating directories..."
 mkdir -p /etc/opendkim/keys/${domain_name}
 
+mkdir -p /var/mail/vhosts/${domain_name}
+chown vmail:vmail /var/mail/vhosts/${domain_name}
+chmod 2770 /var/mail/vhosts/${domain_name}
+
 # --- Generate DKIM keys ---
 echo "Generating DKIM keys..."
 opendkim-genkey -b 2048 -d ${domain_name} -s mail -D /etc/opendkim/keys/${domain_name}
 chown -R opendkim:opendkim /etc/opendkim/keys/${domain_name}
-chmod go-rw /etc/opendkim/keys/${domain_name}/mail.private
+chmod 600 /etc/opendkim/keys/${domain_name}/mail.private
 
 echo "Updating DKIM tables..."
 echo -e "mail._domainkey.${domain_name} ${domain_name}:mail:/etc/opendkim/keys/${domain_name}/mail.private" >> /etc/opendkim/KeyTable
