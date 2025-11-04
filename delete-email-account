@@ -38,7 +38,7 @@ fi
 sed -i "\|[[:space:]]${domain_email}[[:space:]]*$|d" /etc/postfix/virtual_alias_maps
 
 # Remove user entry from Dovecot passwd file
-sed -i "/^${email_username}:/d" /etc/dovecot/passwd
+sed -i "/^${domain_email}:/d" /etc/dovecot/passwd
 
 # Update Postfix maps
 postmap /etc/postfix/virtual_alias_maps
