@@ -1,6 +1,11 @@
 # email-admin
 
-**email-admin** is a collection of scripts to configure and manage a file-based email server on Debian.
+**email-admin** is a collection of scripts to configure and manage a file-based email server on Debian. Currently works for Debian 12 (Bookworm), updates are needed to work with Debian 13 (Trixie) or newer.
+
+Recommended Prerequisites:
+1. Get ISP static IP address.
+2. Confirm ports 587, 465 (out bound), and 25 (in bound) are not blocked by ISP.
+3. Confirm a rDNS pointer exists or can be created.
 
 ## Features
 - Install and set up a complete email server
